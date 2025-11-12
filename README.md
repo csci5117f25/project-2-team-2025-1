@@ -4,14 +4,15 @@ CSCI 5117, Fall 2025, [assignment description](https://canvas.umn.edu/courses/51
 
 ## App Info:
 
-* Team Name: TODO
+* Team Name: Team-2025😅
 * App Name: TODO
 * App Link: <https://TODO.com/>
 
 ### Students
 
-* First Last, x500@umn.edu
-* ...
+* Linglong Meng, meng0181
+* Michael Wosenyeleh, wosen002
+* Wan Wang, wang9814
 
 
 ## Key Features
