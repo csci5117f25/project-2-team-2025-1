@@ -36,11 +36,13 @@ Which (if any) progressive web app feature(s) does your app support?
 
 **[Add images/photos that show your mockup](https://stackoverflow.com/questions/10189356/how-to-add-screenshot-to-readmes-in-github-repository) along with a very brief caption:**
 
-
+**Team Page and Athlete Highlighs page**
 ![Image](https://github.com/user-attachments/assets/1e0e19e5-a100-465d-b33d-3385bb989829)
 
+**Athlete stats and games page**
 ![Image](https://github.com/user-attachments/assets/2f209a88-ff00-4308-968d-44df9262cad5)
 
+**Video note taking page**
 ![Image](https://github.com/user-attachments/assets/df7cdfd8-3a7d-406c-943d-9cbab031f007)
 
 
