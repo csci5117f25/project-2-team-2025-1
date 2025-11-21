@@ -1,0 +1,196 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background-color: #ffffff;
+  color: #333;
+}
+
+#app {
+  width: 100%;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0;
+}
+
+/* Header */
+.header {
+  display: flex;
+  border-bottom: 2px solid #000;
+  background: #fff;
+}
+
+.tab {
+  flex: 1;
+  padding: 20px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  background: #fff;
+  border: none;
+  border-right: 2px solid #000;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.tab:last-child {
+  border-right: none;
+}
+
+.tab:hover {
+  background: #f5f5f5;
+}
+
+.tab.active {
+  background: #fff;
+  font-weight: 700;
+}
+
+/* Main Content */
+.main-content {
+  padding: 40px 20px;
+}
+
+.team-title {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-bottom: 40px;
+  text-align: center;
+}
+
+/* Section */
+.section {
+  margin-bottom: 40px;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  padding: 12px 20px;
+  background: #7CB4E8;
+  color: #fff;
+  margin-bottom: 0;
+}
+
+/* Player List */
+.player-list {
+  background: #fff;
+}
+
+.player-item {
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
+  background: #E5E5E5;
+  border-bottom: 3px solid #fff;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.player-item:hover {
+  background: #d5d5d5;
+}
+
+.player-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 16px;
+  border: 2px solid #999;
+}
+
+.player-icon svg {
+  color: #666;
+}
+
+.player-name {
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  margin-top: 60px;
+}
+
+.btn {
+  padding: 16px 40px;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  border: 3px solid;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: #fff;
+}
+
+.btn-new-game {
+  border-color: #4A90E2;
+  color: #4A90E2;
+}
+
+.btn-new-game:hover {
+  background: #4A90E2;
+  color: #fff;
+}
+
+.btn-edit-team {
+  border-color: #7BC96F;
+  color: #7BC96F;
+}
+
+.btn-edit-team:hover {
+  background: #7BC96F;
+  color: #fff;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+  }
+
+  .tab {
+    border-right: none;
+    border-bottom: 2px solid #000;
+  }
+
+  .tab:last-child {
+    border-bottom: none;
+  }
+
+  .team-title {
+    font-size: 20px;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .btn {
+    width: 100%;
+  }
+
+  .main-content {
+    padding: 20px 10px;
+  }
+}
