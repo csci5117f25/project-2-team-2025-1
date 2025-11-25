@@ -5,8 +5,8 @@ CSCI 5117, Fall 2025, [assignment description](https://canvas.umn.edu/courses/51
 ## App Info:
 
 * Team Name: Team-2025😅
-* App Name: TODO
-* App Link: <https://TODO.com/>
+* App Name: player trakcer
+* App Link: <https://project2-f33f1.web.app/>
 
 ### Students
 
