@@ -60,9 +60,31 @@
       </div>
 
       <div v-if="activeTab === 'games'">
-        <div class="notification is-light has-text-centered">
-          <strong>No games yet</strong>
-          <p>This player has no recorded games. You can add games later.</p>
+        <div class="columns is-multiline">
+          <div class="column is-half" v-for="game in games" :key="game.id">
+            <div class="card">
+              <div class="card-image">
+                <figure class="image is-16by9 video-placeholder">
+                  <template v-if="game.videoUrl">
+                    <video :src="game.videoUrl" controls style="width:100%;height:100%;object-fit:cover"></video>
+                  </template>
+                  <template v-else>
+                    <div class="play-icon">▶</div>
+                  </template>
+                </figure>
+              </div>
+              <div class="card-content">
+                <p class="title is-6">{{ game.title }}</p>
+                <p class="subtitle is-7">{{ game.date }}</p>
+                <router-link
+                  :to="{ name: 'GameEditor', params: { playerId: $route.params.id, gameId: game.id } }"
+                  class="button is-small is-primary is-outlined mt-2"
+                >
+                  Edit Game
+                </router-link>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -156,6 +178,12 @@ export default {
         { id: 2, title: 'C vs D', date: '4/9/25', videoUrl: null },
         { id: 3, title: 'E vs F', date: '1/2/25', videoUrl: null },
         { id: 4, title: 'G vs H', date: '2/12/25', videoUrl: null }
+      ],
+      games: [
+        { id: 1, title: 'Roseville vs Woodbridge', date: '3/4/21', videoUrl: null },
+        { id: 2, title: 'Roseville vs CDM', date: '4/9/24', videoUrl: null },
+        { id: 3, title: 'Roseville vs CJW', date: '1/2/23', videoUrl: null },
+        { id: 4, title: 'Roseville vs ...', date: '', videoUrl: null }
       ],
       activeTab: 'highlights',
       showAddHighlight: false,
