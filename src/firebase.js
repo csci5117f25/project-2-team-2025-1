@@ -4,15 +4,7 @@ import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import { getStorage } from "firebase/storage";
 import { getFirestore } from "firebase/firestore";
-
-// TODO: Add SDKs for Firebase products that you want to use
-
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-
-// Your web app's Firebase configuration
-
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+import { getAuth } from "firebase/auth";
 
 const firebaseConfig = {
 
@@ -22,7 +14,7 @@ const firebaseConfig = {
 
     projectId: "project2-f33f1",
 
-    storageBucket: "project2-f33f1.appspot.com",
+    storageBucket: "project2-f33f1.firebasestorage.app",
 
     messagingSenderId: "889285337798",
 
@@ -38,6 +30,7 @@ const firebaseConfig = {
 let app
 let storage
 let db
+let auth
 try {
     if (firebaseConfig.apiKey) {
         app = initializeApp(firebaseConfig)
@@ -45,9 +38,10 @@ try {
         try { getAnalytics(app) } catch (e) { /* ignore in non-browser envs */ }
         storage = getStorage(app)
         db = getFirestore(app)
+        auth = getAuth(app)
     }
 } catch (e) {
     // initialization failed (likely missing env vars); leave undefined
 }
 
-export { storage, db }
+export { storage, db, auth }

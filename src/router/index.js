@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import TeamsListPage from '../components/TeamsListPage.vue'
 import TeamPage from '../components/TeamPage.vue'
 import PlayerPage from '../components/PlayerPage.vue'
 import VideoPlayer from '../components/VideoPlayer.vue'
@@ -6,12 +7,17 @@ import VideoPlayer from '../components/VideoPlayer.vue'
 const routes = [
   {
     path: '/',
-    name: 'Team',
-    component: TeamPage
-  }
-  ,
+    name: 'TeamsList',
+    component: TeamsListPage
+  },
   {
-    path: '/player/:id',
+    path: '/team/:teamId',
+    name: 'TeamPlayers',
+    component: TeamPage,
+    props: true
+  },
+  {
+    path: '/team/:teamId/player/:id',
     name: 'Player',
     component: PlayerPage,
     props: true

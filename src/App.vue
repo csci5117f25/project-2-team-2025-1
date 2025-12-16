@@ -1,11 +1,27 @@
 <template>
   <div id="app">
-    <router-view />
+    <Auth v-if="!user" @user-changed="handleUserChanged" />
+    <router-view v-else />
   </div>
 </template>
 
 <script>
+import Auth from './components/Auth.vue'
+
 export default {
-  name: 'App'
+  name: 'App',
+  components: {
+    Auth
+  },
+  data() {
+    return {
+      user: null
+    }
+  },
+  methods: {
+    handleUserChanged(user) {
+      this.user = user
+    }
+  }
 }
 </script>

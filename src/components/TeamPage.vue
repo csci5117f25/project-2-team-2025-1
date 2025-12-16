@@ -6,68 +6,71 @@
       <button class="tab">SEASONS</button>
       <button class="tab">SETTINGS</button>
     </header>
+
     <!-- Main Content -->
     <main class="main-content">
-      <h1 class="team-title">ROSEVILLE BASKETBALL TEAM 2025-26</h1>
+      <h1 class="team-title">{{ teamName }}</h1>
+
       <!-- Athletes Section -->
       <div class="section">
         <h2 class="section-title">ATHLETES</h2>
 
-        <div class="player-list">
+        <div class="player-list" v-if="players.length > 0">
           <router-link
             class="player-item"
             v-for="player in players"
             :key="player.id"
-            :to="{ name: 'Player', params: { id: String(player.id) } }"
+            :to="{ name: 'Player', params: { teamId: $route.params.teamId, id: player.id } }"
           >
             <div class="player-icon">
-              <template v-if="player.photo">
-                <img :src="player.photo" alt="player photo" class="player-photo" />
-              </template>
-              <template v-else>
-                <span class="player-emoji" role="img" :aria-label="`Player avatar: ${player.name}`">🏀</span>
-              </template>
+              <img v-if="player.photo" :src="player.photo" alt="player" class="player-photo" />
+              <svg v-else width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="8" r="4"/>
+                <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+              </svg>
             </div>
             <span class="player-name">{{ player.name }}</span>
           </router-link>
         </div>
+        <div v-else class="notification is-light has-text-centered">
+          No players yet. Click "ADD PLAYER" below.
+        </div>
       </div>
+
       <!-- Action Buttons -->
       <div class="action-buttons">
         <button class="btn btn-new-game">NEW GAME</button>
-        <button class="btn btn-edit-team">EDIT TEAM</button>
-        <button class="btn btn-add-player" @click="showAddModal = true">ADD PLAYER</button>
+        <button class="btn btn-add-player" @click="showModal = true">ADD PLAYER</button>
       </div>
 
       <!-- Add Player Modal -->
-      <div class="modal" :class="{ 'is-active': showAddModal }" v-if="showAddModal">
-        <div class="modal-background" @click="closeModal"></div>
+      <div class="modal" :class="{ 'is-active': showModal }">
+        <div class="modal-background" @click="showModal = false"></div>
         <div class="modal-card">
           <header class="modal-card-head">
             <p class="modal-card-title">Add Player</p>
-            <button class="delete" aria-label="close" @click="closeModal"></button>
+            <button class="delete" @click="showModal = false"></button>
           </header>
           <section class="modal-card-body">
             <div class="field">
               <label class="label">Name</label>
               <div class="control">
-                <input class="input" type="text" placeholder="Player name" v-model="newPlayer.name" />
+                <input class="input" v-model="newPlayerName" placeholder="Player name" />
               </div>
             </div>
-
             <div class="field">
-              <label class="label">Photo</label>
+              <label class="label">Photo (optional)</label>
               <div class="control">
                 <input type="file" accept="image/*" @change="onFileChange" />
               </div>
-              <div v-if="newPlayer.photo" class="image is-64x64" style="margin-top:8px">
-                <img :src="newPlayer.photo" alt="preview" />
+              <div v-if="newPlayer.photoPreview" class="mt-2">
+                <img :src="newPlayer.photoPreview" alt="preview" style="width:100px;height:100px;object-fit:cover;border-radius:50%;" />
               </div>
             </div>
           </section>
           <footer class="modal-card-foot">
-            <button class="button is-success" @click="addPlayer">Add Player</button>
-            <button class="button" @click="closeModal">Cancel</button>
+            <button class="button is-success" @click="addPlayer">Add</button>
+            <button class="button" @click="showModal = false">Cancel</button>
           </footer>
         </div>
       </div>
@@ -76,87 +79,156 @@
 </template>
 
 <script>
+import { collection, getDocs, doc, setDoc, getDoc, query, where } from 'firebase/firestore'
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { db, storage } from '../firebase.js'
+
 export default {
   name: 'TeamPage',
+  props: ['teamId'],
   data() {
     return {
-      players: [
-        { id: 1, name: 'PLAYER' },
-        { id: 2, name: 'PLAYER 2' },
-        { id: 3, name: 'PLAYER 3' },
-        { id: 4, name: 'REESE' },
-        { id: 5, name: 'JACK H.' }
-      ]
-      ,
-      showAddModal: false,
+      teamName: '',
+      players: [],
+      showModal: false,
+      newPlayerName: '',
       newPlayer: {
-        name: '',
-        photo: null,
+        photoPreview: null,
         file: null
-      }
-      ,
+      },
       createdUrls: []
     }
-  }
-  ,
+  },
+  async mounted() {
+    await this.loadTeam()
+    await this.loadPlayers()
+  },
   methods: {
-    onFileChange(e){
-      const file = e.target.files && e.target.files[0]
-      if(!file) return
+    async loadTeam() {
+      try {
+        const teamRef = doc(db, 'teams', this.teamId)
+        const teamSnap = await getDoc(teamRef)
+        if (teamSnap.exists()) {
+          this.teamName = teamSnap.data().name
+        }
+      } catch (err) {
+        console.error('Failed to load team', err)
+      }
+    },
+    async loadPlayers() {
+      try {
+        const playersCol = collection(db, 'players')
+        const q = query(playersCol, where('teamId', '==', this.teamId))
+        const snapshot = await getDocs(q)
+        this.players = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      } catch (err) {
+        console.error('Failed to load players', err)
+      }
+    },
+    onFileChange(e) {
+      const file = e.target.files?.[0]
+      if (!file) return
       this.newPlayer.file = file
-      if(this.newPlayer.photo && this.createdUrls.includes(this.newPlayer.photo)){
-        URL.revokeObjectURL(this.newPlayer.photo)
-        this.createdUrls = this.createdUrls.filter(u => u !== this.newPlayer.photo)
+      if (this.newPlayer.photoPreview && this.createdUrls.includes(this.newPlayer.photoPreview)) {
+        URL.revokeObjectURL(this.newPlayer.photoPreview)
+        this.createdUrls = this.createdUrls.filter(u => u !== this.newPlayer.photoPreview)
       }
       const url = URL.createObjectURL(file)
-      this.newPlayer.photo = url
+      this.newPlayer.photoPreview = url
       this.createdUrls.push(url)
     },
-    closeModal(){
-      this.showAddModal = false
-      if(this.newPlayer.photo && this.createdUrls.includes(this.newPlayer.photo)){
-        URL.revokeObjectURL(this.newPlayer.photo)
-        this.createdUrls = this.createdUrls.filter(u => u !== this.newPlayer.photo)
+    async addPlayer() {
+      if (!this.newPlayerName) {
+        alert('Please enter a name')
+        return
       }
-      this.newPlayer = { name: '', photo: null, file: null }
-    },
-    async addPlayer(){
-      const id = Date.now()
-      const name = this.newPlayer.name || 'Player'
-      let photoUrl = this.newPlayer.photo || null
-      try{
-        if(this.newPlayer.file){
-          const { ref: storageRef, uploadBytes, getDownloadURL } = await import('firebase/storage')
-          const { storage, db } = await import('../firebase.js')
-          const ext = (this.newPlayer.file.name || '').split('.').pop() || 'jpg'
-          const path = `players/${id}/avatar.${ext}`
-          const r = storageRef(storage, path)
-          await uploadBytes(r, this.newPlayer.file)
-          photoUrl = await getDownloadURL(r)
 
-          const { doc, setDoc, collection } = await import('firebase/firestore')
-          const docRef = doc(collection(db, 'players'), String(id))
-          await setDoc(docRef, {
-            id: String(id),
-            name,
-            photo: photoUrl,
-            createdAt: new Date().toISOString()
-          })
+      try {
+        const playerId = Date.now().toString()
+        let photoUrl = null
+
+        if (this.newPlayer.file) {
+          try {
+            const ext = this.newPlayer.file.name.split('.').pop() || 'jpg'
+            const path = `players/${playerId}/photo.${ext}`
+            const fileRef = storageRef(storage, path)
+            await uploadBytes(fileRef, this.newPlayer.file)
+            photoUrl = await getDownloadURL(fileRef)
+          } catch (uploadError) {
+            alert('Photo upload failed: ' + uploadError.message)
+          }
         }
-      }catch(err){
-        console.error('Add player upload failed', err)
-        alert('Failed to upload player photo: ' + (err && err.message))
-      }
 
-      this.players.unshift({ id: String(id), name, photo: photoUrl })
-      this.closeModal()
+        const playerRef = doc(db, 'players', playerId)
+        await setDoc(playerRef, {
+          id: playerId,
+          teamId: this.teamId,
+          name: this.newPlayerName,
+          photo: photoUrl,
+          number: '',
+          createdAt: new Date().toISOString()
+        })
+
+        this.players.push({
+          id: playerId,
+          name: this.newPlayerName,
+          photo: photoUrl
+        })
+
+        if (this.newPlayer.photoPreview && this.createdUrls.includes(this.newPlayer.photoPreview)) {
+          URL.revokeObjectURL(this.newPlayer.photoPreview)
+          this.createdUrls = this.createdUrls.filter(u => u !== this.newPlayer.photoPreview)
+        }
+        this.newPlayerName = ''
+        this.newPlayer = { photoPreview: null, file: null }
+        this.showModal = false
+      } catch (err) {
+        console.error('Failed to add player', err)
+        alert('Failed to add player: ' + err.message)
+      }
     }
   },
+  beforeUnmount() {
+    if (this.createdUrls.length) {
+      this.createdUrls.forEach(u => {
+        try { URL.revokeObjectURL(u) } catch(e) {}
+      })
+    }
+  }
 }
 </script>
 
 <style scoped>
-.player-photo{width:40px;height:40px;object-fit:cover;border-radius:50%;border:2px solid #fff}
-.btn-add-player{border-color:#ff6b6b;color:#ff6b6b}
-.btn-add-player:hover{background:#ff6b6b;color:#fff}
+.player-item {
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
+  background: #E5E5E5;
+  border-bottom: 3px solid #fff;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  text-decoration: none;
+  color: inherit;
+}
+
+.player-item:hover {
+  background: #d5d5d5;
+}
+
+.player-photo {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.btn-add-player {
+  border-color: #ff6b6b;
+  color: #ff6b6b;
+}
+
+.btn-add-player:hover {
+  background: #ff6b6b;
+  color: #fff;
+}
 </style>

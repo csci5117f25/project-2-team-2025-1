@@ -166,13 +166,7 @@ export default {
   name: 'PlayerPage',
   data() {
     return {
-      players: [
-        { id: '1', name: 'PLAYER', number: '0' },
-        { id: '2', name: 'PLAYER 2', number: '2' },
-        { id: '3', name: 'PLAYER 3', number: '3' },
-        { id: '4', name: 'REESE', number: '4' },
-        { id: '5', name: 'JACK H.', number: '5' }
-      ],
+      currentPlayer: null,
       highlights: [
         { id: 1, title: 'A vs B', date: '3/4/25', videoUrl: null },
         { id: 2, title: 'C vs D', date: '4/9/25', videoUrl: null },
@@ -201,7 +195,31 @@ export default {
       createdUrls: []
     }
   },
+  async mounted() {
+    await this.loadPlayer()
+  },
+  computed: {
+    player() {
+      return this.currentPlayer || { name: 'Player', number: '--' }
+    }
+  },
   methods: {
+    async loadPlayer() {
+      try {
+        const { doc, getDoc } = await import('firebase/firestore')
+        const { db } = await import('../firebase.js')
+
+        const playerId = this.$route.params.id
+        const playerRef = doc(db, 'players', playerId)
+        const playerSnap = await getDoc(playerRef)
+
+        if (playerSnap.exists()) {
+          this.currentPlayer = { id: playerSnap.id, ...playerSnap.data() }
+        }
+      } catch (err) {
+        console.error('Failed to load player', err)
+      }
+    },
     setTab(tab){
       this.activeTab = tab
     },
@@ -320,12 +338,6 @@ export default {
     if(this.mediaStream){
       this.mediaStream.getTracks().forEach(t => t.stop())
       this.mediaStream = null
-    }
-  },
-  computed: {
-    player() {
-      const id = String(this.$route.params.id || '1')
-      return this.players.find(p => p.id === id) || { name: 'Player', number: '--' }
     }
   }
 }
