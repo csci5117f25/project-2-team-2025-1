@@ -2,6 +2,10 @@
   <div class="container">
     <section class="hero is-white">
       <div class="hero-body">
+        <router-link :to="{ name: 'TeamPlayers', params: { teamId: $route.params.teamId } }" class="button is-text mb-3">
+          <span class="icon">←</span>
+          <span>Back to Athletes</span>
+        </router-link>
         <div class="media">
           <div class="media-left">
             <figure class="image is-96x96">
@@ -28,12 +32,13 @@
       <div class="level">
         <div class="level-left">
           <div class="level-item">
-            <h2 class="title is-5">Highlights</h2>
+            <h2 class="title is-5">{{ activeTab === 'highlights' ? 'Highlights' : activeTab === 'games' ? 'Games' : 'Stats' }}</h2>
           </div>
         </div>
         <div class="level-right">
           <div class="level-item">
-            <button class="button is-primary" @click="openAddHighlight">Add Highlight</button>
+            <button v-if="activeTab === 'highlights'" class="button is-primary" @click="openAddVideo('highlight')">Add Highlight</button>
+            <button v-if="activeTab === 'games'" class="button is-primary" @click="openAddVideo('game')">Add Game</button>
           </div>
         </div>
       </div>
@@ -95,108 +100,40 @@
         </div>
       </div>
 
-      <!-- Add Highlight Modal -->
-      <div class="modal" :class="{ 'is-active': showAddHighlight }">
-        <div class="modal-background" @click="closeAddHighlight"></div>
-        <div class="modal-card">
-          <header class="modal-card-head">
-            <p class="modal-card-title">Add Highlight</p>
-            <button class="delete" aria-label="close" @click="closeAddHighlight"></button>
-          </header>
-          <section class="modal-card-body">
-            <div class="tabs is-toggle is-fullwidth">
-              <ul>
-                <li :class="{ 'is-active': addTab === 'upload' }"><a @click.prevent="addTab='upload'">Upload</a></li>
-                <li :class="{ 'is-active': addTab === 'record' }"><a @click.prevent="addTab='record'">Record</a></li>
-              </ul>
-            </div>
-
-            <div v-if="addTab === 'upload'">
-              <div class="field">
-                <label class="label">Title</label>
-                <div class="control"><input class="input" v-model="highlightForm.title" placeholder="Highlight title" /></div>
-              </div>
-              <div class="field">
-                <label class="label">Video file</label>
-                <div class="control">
-                  <input type="file" accept="video/*" @change="onHighlightFileChange" />
-                </div>
-              </div>
-              <div v-if="highlightForm.previewUrl" class="box">
-                <video :src="highlightForm.previewUrl" controls style="width:100%;max-height:320px;object-fit:cover"></video>
-              </div>
-            </div>
-
-            <div v-if="addTab === 'record'">
-              <div class="field">
-                <label class="label">Title</label>
-                <div class="control"><input class="input" v-model="highlightForm.title" placeholder="Highlight title" /></div>
-              </div>
-              <div class="field">
-                <div class="control">
-                  <video ref="recPreview" autoplay playsinline muted style="width:100%;height:240px;background:#000"></video>
-                </div>
-              </div>
-              <div class="field is-grouped">
-                <div class="control">
-                  <button class="button is-danger" @click="startRecording" :disabled="recording">Start</button>
-                </div>
-                <div class="control">
-                  <button class="button" @click="stopRecording" :disabled="!recording">Stop</button>
-                </div>
-              </div>
-              <div v-if="highlightForm.previewUrl" class="box">
-                <p class="subtitle is-6">Recorded preview</p>
-                <video :src="highlightForm.previewUrl" controls style="width:100%;max-height:320px;object-fit:cover"></video>
-              </div>
-            </div>
-          </section>
-          <footer class="modal-card-foot">
-            <button class="button is-success" @click="submitHighlight">Save</button>
-            <button class="button" @click="closeAddHighlight">Cancel</button>
-          </footer>
-        </div>
-      </div>
+      <!-- Add Video Modal -->
+      <AddVideoModal
+        :show="showAddModal"
+        :videoType="videoType"
+        :playerId="$route.params.id"
+        @close="showAddModal = false"
+        @saved="handleVideoSaved"
+      />
     </section>
   </div>
 </template>
 
 <script>
+import AddVideoModal from './AddVideoModal.vue'
+
 export default {
   name: 'PlayerPage',
+  components: {
+    AddVideoModal
+  },
   data() {
     return {
       currentPlayer: null,
-      highlights: [
-        { id: 1, title: 'A vs B', date: '3/4/25', videoUrl: null },
-        { id: 2, title: 'C vs D', date: '4/9/25', videoUrl: null },
-        { id: 3, title: 'E vs F', date: '1/2/25', videoUrl: null },
-        { id: 4, title: 'G vs H', date: '2/12/25', videoUrl: null }
-      ],
-      games: [
-        { id: 1, title: 'Roseville vs Woodbridge', date: '3/4/21', videoUrl: null },
-        { id: 2, title: 'Roseville vs CDM', date: '4/9/24', videoUrl: null },
-        { id: 3, title: 'Roseville vs CJW', date: '1/2/23', videoUrl: null },
-        { id: 4, title: 'Roseville vs ...', date: '', videoUrl: null }
-      ],
+      highlights: [],
+      games: [],
       activeTab: 'highlights',
-      showAddHighlight: false,
-      addTab: 'upload',
-      highlightForm: {
-        title: '',
-        date: '',
-        file: null,
-        previewUrl: null
-      },
-      recording: false,
-      mediaStream: null,
-      mediaRecorder: null,
-      recordedChunks: [],
-      createdUrls: []
+      showAddModal: false,
+      videoType: 'highlight'
     }
   },
   async mounted() {
     await this.loadPlayer()
+    await this.loadHighlights()
+    await this.loadGames()
   },
   computed: {
     player() {
@@ -220,124 +157,47 @@ export default {
         console.error('Failed to load player', err)
       }
     },
+    async loadHighlights() {
+      try {
+        const { collection, getDocs, query, where } = await import('firebase/firestore')
+        const { db } = await import('../firebase.js')
+
+        const playerId = this.$route.params.id
+        const highlightsCol = collection(db, 'highlights')
+        const q = query(highlightsCol, where('playerId', '==', playerId))
+        const snapshot = await getDocs(q)
+        this.highlights = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      } catch (err) {
+        console.error('Failed to load highlights', err)
+      }
+    },
+    async loadGames() {
+      try {
+        const { collection, getDocs, query, where } = await import('firebase/firestore')
+        const { db } = await import('../firebase.js')
+
+        const playerId = this.$route.params.id
+        const gamesCol = collection(db, 'games')
+        const q = query(gamesCol, where('playerId', '==', playerId))
+        const snapshot = await getDocs(q)
+        this.games = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      } catch (err) {
+        console.error('Failed to load games', err)
+      }
+    },
     setTab(tab){
       this.activeTab = tab
     },
-    openAddHighlight(){
-      this.showAddHighlight = true
-      this.addTab = 'upload'
-      this.highlightForm = { title: '', date: new Date().toLocaleDateString(), file: null, previewUrl: null }
+    openAddVideo(type){
+      this.videoType = type
+      this.showAddModal = true
     },
-    closeAddHighlight(){
-      this.showAddHighlight = false
-      // stop camera if active
-      if(this.mediaRecorder && this.recording){
-        this.mediaRecorder.stop()
+    handleVideoSaved(type) {
+      if (type === 'highlight') {
+        this.loadHighlights()
+      } else {
+        this.loadGames()
       }
-      if(this.mediaStream){
-        this.mediaStream.getTracks().forEach(t => t.stop())
-        this.mediaStream = null
-      }
-      // revoke preview URL if it was created during modal
-      if(this.highlightForm && this.highlightForm.previewUrl && this.createdUrls.includes(this.highlightForm.previewUrl)){
-        URL.revokeObjectURL(this.highlightForm.previewUrl)
-        this.createdUrls = this.createdUrls.filter(u => u !== this.highlightForm.previewUrl)
-      }
-      this.highlightForm = { title: '', date: '', file: null, previewUrl: null }
-      this.recording = false
-    },
-    onHighlightFileChange(e){
-      const file = e.target.files && e.target.files[0]
-      if(!file) return
-      this.highlightForm.file = file
-      if(this.highlightForm.previewUrl && this.createdUrls.includes(this.highlightForm.previewUrl)){
-        URL.revokeObjectURL(this.highlightForm.previewUrl)
-        this.createdUrls = this.createdUrls.filter(u => u !== this.highlightForm.previewUrl)
-      }
-      const url = URL.createObjectURL(file)
-      this.highlightForm.previewUrl = url
-      this.createdUrls.push(url)
-    },
-    async submitHighlight(){
-      const id = Date.now()
-      const title = this.highlightForm.title || 'Highlight'
-      const date = this.highlightForm.date || new Date().toLocaleDateString()
-
-      // upload to fire and get link
-      let finalUrl = this.highlightForm.previewUrl || null
-      try{
-        if(this.highlightForm.file){
-          const { ref: storageRef, uploadBytes, getDownloadURL } = await import('firebase/storage')
-          const { storage, db } = await import('../firebase.js')
-          const path = `players/${this.$route.params.id || 'unknown'}/highlights/${id}`
-          const r = storageRef(storage, path)
-          await uploadBytes(r, this.highlightForm.file)
-          finalUrl = await getDownloadURL(r)
-
-          // save metadata to Firestore
-          const { doc, setDoc, collection } = await import('firebase/firestore')
-          const docRef = doc(collection(db, 'highlights'), String(id))
-          await setDoc(docRef, {
-            id: String(id),
-            playerId: String(this.$route.params.id || '1'),
-            title,
-            date,
-            videoUrl: finalUrl,
-            createdAt: new Date().toISOString()
-          })
-        }
-      }catch(err){
-        console.error('Upload failed', err)
-        alert('Upload failed: ' + (err && err.message))
-      }
-
-      this.highlights.unshift({ id, title, date, videoUrl: finalUrl })
-      this.closeAddHighlight()
-    },
-    async startRecording(){
-      try{
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        this.mediaStream = stream
-        const videoEl = this.$refs.recPreview
-        if(videoEl){
-          videoEl.srcObject = stream
-        }
-        this.recordedChunks = []
-        this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' })
-        this.mediaRecorder.ondataavailable = (e) => { if(e.data && e.data.size) this.recordedChunks.push(e.data) }
-        this.mediaRecorder.onstop = () => {
-          const blob = new Blob(this.recordedChunks, { type: 'video/webm' })
-          const url = URL.createObjectURL(blob)
-          this.highlightForm.previewUrl = url
-          this.createdUrls.push(url)
-        }
-        this.mediaRecorder.start()
-        this.recording = true
-      }catch(err){
-        console.error('Camera error', err)
-        alert('Unable to access camera: ' + (err && err.message))
-      }
-    },
-    stopRecording(){
-      if(this.mediaRecorder && this.recording){
-        this.mediaRecorder.stop()
-      }
-      if(this.mediaStream){
-        this.mediaStream.getTracks().forEach(t => t.stop())
-        this.mediaStream = null
-      }
-      this.recording = false
-    }
-  },
-  beforeUnmount(){
-    // revoke any object URLs we created
-    if(this.createdUrls && this.createdUrls.length){
-      this.createdUrls.forEach(u => { try{ URL.revokeObjectURL(u) }catch(e){} })
-      this.createdUrls = []
-    }
-    if(this.mediaStream){
-      this.mediaStream.getTracks().forEach(t => t.stop())
-      this.mediaStream = null
     }
   }
 }

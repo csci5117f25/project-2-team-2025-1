@@ -2,13 +2,23 @@
   <div class="container">
     <!-- Header Navigation -->
     <header class="header">
-      <button class="tab active">TEAMS</button>
+      <router-link to="/" class="tab active">TEAMS</router-link>
       <button class="tab">SEASONS</button>
       <button class="tab">SETTINGS</button>
     </header>
 
     <!-- Main Content -->
     <main class="main-content">
+      <div class="level">
+        <div class="level-left">
+          <div class="level-item">
+            <router-link to="/" class="button is-text">
+              <span class="icon">←</span>
+              <span>Back to Teams</span>
+            </router-link>
+          </div>
+        </div>
+      </div>
       <h1 class="team-title">{{ teamName }}</h1>
 
       <!-- Athletes Section -->
