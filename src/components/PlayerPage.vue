@@ -38,8 +38,8 @@
         </div>
         <div class="level-right">
           <div class="level-item">
-            <button v-if="activeTab === 'highlights'" class="button is-primary" @click="openAddVideo('highlight')">Add Highlight</button>
-            <button v-if="activeTab === 'games'" class="button is-primary" @click="openAddVideo('game')">Add Game</button>
+            <button v-if="activeTab === 'highlights'" class="button is-primary" @click="openAddVideo('highlight')">Add Highlight with Camera</button>
+            <button v-if="activeTab === 'games'" class="button is-primary" @click="openAddVideo('game')">Add Game with Camera</button>
           </div>
         </div>
       </div>
@@ -88,7 +88,7 @@
                     :to="{ name: 'GameEditor', params: { playerId: $route.params.id, gameId: game.id } }"
                     class="button is-small is-primary is-outlined"
                   >
-                    Edit Game
+                    Add Annotations to Video
                   </router-link>
                   <button class="button is-small is-danger" @click="deleteGame(game.id)">Delete</button>
                 </div>
