@@ -10,7 +10,7 @@
           </div>
           <div class="media-content">
             <p class="title is-3">{{ player.name }}</p>
-            <p class="subtitle is-6">CLASS OF 2027 &nbsp; <strong>#{{ player.number }}</strong></p>
+            <p class="subtitle is-6"><strong>#{{ player.number }}</strong></p>
           </div>
         </div>
       </div>
@@ -89,9 +89,66 @@
       </div>
 
       <div v-if="activeTab === 'stats'">
-        <div class="notification is-light has-text-centered">
-          <strong>No stats available</strong>
-          <p>Statistics will appear here once data is added for this player.</p>
+        <div class="box">
+          <div class="field is-horizontal">
+            <div class="field-label is-normal">
+              <label class="label">Stat</label>
+            </div>
+            <div class="field-body">
+              <div class="field">
+                <div class="control">
+                  <div class="select">
+                    <select v-model="selectedStat" @change="renderChart">
+                      <option v-for="s in statOptions" :key="s.key" :value="s.key">{{ s.label }}</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <canvas id="playerStatChart" style="width:100%;max-height:360px"></canvas>
+            <div class="box" style="margin-top:12px;white-space:pre-wrap">
+              <strong>datapoints:</strong>
+              <pre style="margin-top:6px">{{ JSON.stringify(datapoints, null, 2) }}</pre>
+            </div>
+          </div>
+        
+          <!-- Team selector and recent games table -->
+          <div class="field" style="margin-top:18px">
+            <label class="label">Team</label>
+            <div class="control">
+              <div class="select">
+                <select v-model="selectedTeamId" @change="loadRecentGamesForSelectedTeam">
+                  <option v-for="t in teamsList" :key="t.id" :value="t.id">{{ t.name }} {{ t.season ? '('+t.season+')' : '' }}</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="recent-games table-container">
+            <table class="table is-fullwidth is-striped">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Opponent</th>
+                  <th>Home</th>
+                  <th>Away</th>
+                  <th>Stat</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="rg in recentGames" :key="rg.gameId">
+                  <td>{{ rg.date || 'TBD' }}</td>
+                  <td>{{ rg.opponent }}</td>
+                  <td>{{ rg.home }}</td>
+                  <td>{{ rg.away }}</td>
+                  <td>{{ (rg.stats && (rg.stats[selectedStat] !== undefined)) ? rg.stats[selectedStat] : '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -162,6 +219,10 @@
 </template>
 
 <script>
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore'
+import { db, auth } from '../firebase.js'
+import { onAuthStateChanged } from 'firebase/auth'
+
 export default {
   name: 'PlayerPage',
   data() {
@@ -198,12 +259,42 @@ export default {
       mediaStream: null,
       mediaRecorder: null,
       recordedChunks: [],
-      createdUrls: []
+      createdUrls: [],
+      // team & recent games
+      teamsList: [],
+      selectedTeamId: null,
+      recentGames: [],
+      teamStatKeys: [],
+      athlete: null,
+      datapoints: [],
+      // chart/stat state
+      statOptions: [
+        { key: 'points', label: 'Points' },
+        { key: 'rebounds', label: 'Rebounds' },
+        { key: 'assists', label: 'Assists' },
+        { key: 'turnovers', label: 'Turnovers' },
+        { key: 'fga', label: 'Field Goal Attempts' },
+        { key: 'fgm', label: 'Field Goals Made' },
+        { key: 'two_pa', label: '2-Point Attempts' },
+        { key: 'two_pm', label: '2-Points Made' },
+        { key: 'three_pa', label: '3-Point Attempts' },
+        { key: 'three_pm', label: '3-Points Made' },
+        { key: 'fouls', label: 'Fouls' }
+      ],
+      selectedStat: 'points',
+      chart: null
     }
+  },
+  async mounted(){
+    await this.loadTeamsForPlayer()
   },
   methods: {
     setTab(tab){
       this.activeTab = tab
+      if(tab === 'stats'){
+        // render chart shortly after DOM updates
+        this.$nextTick(()=>{ this.renderChart() })
+      }
     },
     openAddHighlight(){
       this.showAddHighlight = true
@@ -310,6 +401,188 @@ export default {
       }
       this.recording = false
     }
+
+    ,
+    async ensureChartJs(){
+      if(window && window.Chart) return Promise.resolve()
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script')
+        s.src = 'https://cdn.jsdelivr.net/npm/chart.js'
+        s.onload = () => resolve()
+        s.onerror = (e) => reject(e)
+        document.head.appendChild(s)
+      })
+    },
+
+    getPlayerStatFromGame(game, playerId, statKey){
+      if(!game) return null
+      const tryContainers = ['players','playerStats','stats','playersData']
+      for(const c of tryContainers){
+        const cont = game[c]
+        if(!cont) continue
+        if(Array.isArray(cont)){
+          const found = cont.find(p => String(p.athleteId || p.id) === String(playerId))
+          if(found && (statKey in found)) return found[statKey]
+        } else if(typeof cont === 'object'){
+          // keyed by athlete id
+          const item = cont[String(playerId)] || cont[playerId]
+          if(item && (statKey in item)) return item[statKey]
+        }
+      }
+      // fallback: maybe game has top-level mapping by player id
+      if(game[String(playerId)]){
+        const it = game[String(playerId)]
+        if(statKey in it) return it[statKey]
+      }
+      return null
+    },
+
+    async renderChart(){
+      try{
+        await this.ensureChartJs()
+        const canvas = document.getElementById('playerStatChart')
+        if(!canvas) return
+
+        // prepare points: datapoints must have x (order) and Stat (y)
+        const pts = (this.datapoints || []).map(d => ({
+          x: d.x !== undefined ? d.x : null,
+          y: (d.Stat !== null && d.Stat !== undefined) ? Number(d.Stat) : null,
+          date: d.date || null
+        })).filter(p => p.x !== null)
+
+        if(this.chart){ try{ this.chart.destroy() }catch(e){} this.chart = null }
+
+        this.chart = new Chart(canvas.getContext('2d'), {
+          type: 'scatter',
+          data: {
+            datasets: [{ label: (this.selectedStat || 'stat'), data: pts, backgroundColor: '#2563eb' }]
+          },
+          options: {
+            scales: {
+              x: { type: 'linear', title: { display: true, text: 'Game (oldest → newest)' }, ticks: { stepSize: 1 } },
+              y: { beginAtZero: true, title: { display: true, text: 'Value' } }
+            },
+            plugins: {
+              tooltip: {
+                callbacks: {
+                  label: function(context){
+                    const r = context.raw || {}
+                    return `${r.date ? r.date + ' — ' : ''}Value: ${r.y}`
+                  }
+                }
+              }
+            }
+          }
+        })
+      }catch(err){ console.warn('Chart build failed', err) }
+    }
+    ,
+    async loadTeamsForPlayer(){
+      try{
+        const playerId = String(this.$route.params.id || '1')
+        let uid = auth && auth.currentUser && auth.currentUser.uid
+        if(!uid){ uid = await new Promise(resolve=>{ const unsub = onAuthStateChanged(auth,(u)=>{ unsub(); resolve(u?u.uid:null) }) }) }
+        if(!uid) return
+        const athleteRef = doc(db, 'users', String(uid), 'athletes', String(playerId))
+        const athleteSnap = await getDoc(athleteRef)
+        if(!athleteSnap.exists()) return
+        const athlete = athleteSnap.data()
+        this.athlete = Object.assign({ id: athleteSnap.id }, athlete)
+        const teamRefs = athlete.team || []
+        const list = []
+        for(const tr of teamRefs){
+          try{
+            const tRef = tr && tr.path ? doc(db, ...tr.path.split('/')) : tr
+            const tsnap = await getDoc(tRef)
+            if(tsnap.exists()) list.push({ id: tsnap.id, ...tsnap.data() })
+          }catch(e){ continue }
+        }
+        this.teamsList = list
+        if(list.length>0){ this.selectedTeamId = this.selectedTeamId || String(list[0].id); await this.loadRecentGamesForSelectedTeam() }
+      }catch(err){ console.warn('Failed to load teams for player', err) }
+    },
+
+    async loadRecentGamesForSelectedTeam(){
+      try{
+        this.recentGames = []
+        const playerId = String(this.$route.params.id || '1')
+        const teamId = this.selectedTeamId
+        if(!teamId) return
+        let uid = auth && auth.currentUser && auth.currentUser.uid
+        if(!uid){ uid = await new Promise(resolve=>{ const unsub = onAuthStateChanged(auth,(u)=>{ unsub(); resolve(u?u.uid:null) }) }) }
+        if(!uid) return
+
+        const athleteRef = doc(db, 'users', String(uid), 'athletes', String(playerId))
+        const aSnap = await getDoc(athleteRef)
+        if(!aSnap.exists()) return
+        const athlete = aSnap.data()
+        const gamesRefs = athlete.games || []
+
+        const filtered = gamesRefs.filter(gr => {
+          try{ const p = gr.path || (gr && gr._path && gr._path.segments && gr._path.segments.join('/')) ; return p && p.includes(`/Teams/${teamId}/games/`) }catch(e){ return false }
+        })
+
+        const rows = []
+        for(const gref of filtered){
+          try{
+            const gSnap = await getDoc(gref)
+            if(!gSnap.exists()) continue
+            const g = { id: gSnap.id, ...gSnap.data() }
+            const playerDocRef = doc(db, 'users', String(uid), 'Teams', String(teamId), 'games', String(g.id), 'players', String(playerId))
+            const pSnap = await getDoc(playerDocRef)
+            const stats = pSnap.exists() ? pSnap.data() : {}
+            rows.push(Object.assign({ gameId: g.id, date: g.date || null, opponent: g.opponent || '', home: g.home || 0, away: g.away || 0, stats }, {}))
+          }catch(e){ console.warn('failed reading game ref', e); continue }
+        }
+
+        rows.sort((a,b)=>{
+          const da = Date.parse(a.date) || 0
+          const db = Date.parse(b.date) || 0
+          return db - da
+        })
+
+        this.recentGames = rows.slice(0,10)
+        // build datapoints array from the table rows for the selected stat
+        try{
+          this.datapoints = this.recentGames.map(r => ({ date: r.date || null, Stat: (r.stats && r.stats[this.selectedStat] !== undefined) ? r.stats[this.selectedStat] : null }))
+
+          // compute x ordering (oldest => 1)
+          const parsed = this.datapoints.map(d => ({ ...d, _ts: d.date ? Date.parse(d.date) : null }))
+          const sortedTimes = parsed.map(p => p._ts).filter(t => t !== null).sort((a,b)=>a-b)
+          const maxIndex = sortedTimes.length
+          this.datapoints = parsed.map(p => {
+            const x = p._ts !== null ? (sortedTimes.indexOf(p._ts) + 1) : (maxIndex + 1)
+            return { date: p.date || null, Stat: p.Stat, x }
+          })
+        }catch(e){ this.datapoints = [] }
+        // render chart from table values when available
+        if(this.recentGames && this.recentGames.length){
+
+
+
+
+          
+          this.$nextTick(()=>{ if(this.activeTab === 'stats') this.renderChart() })
+        } else {
+          if(this.chart){ try{ this.chart.destroy() }catch(e){} this.chart = null }
+        }
+      }catch(err){ console.error('Failed to load recent games', err) }
+    }
+  },
+  watch: {
+    selectedStat(newVal){
+      try{
+        const base = (this.recentGames || []).map(r => ({ date: r.date || null, Stat: (r.stats && r.stats[newVal] !== undefined) ? r.stats[newVal] : null }))
+        const parsed = base.map(d => ({ ...d, _ts: d.date ? Date.parse(d.date) : null }))
+        const sorted = parsed.map(p => p._ts).filter(t => t !== null).sort((a,b)=>a-b)
+        const maxIndex = sorted.length
+        this.datapoints = parsed.map(p => {
+          const x = p._ts !== null ? (sorted.indexOf(p._ts) + 1) : (maxIndex + 1)
+          return { date: p.date || null, Stat: p.Stat, x }
+        })
+      }catch(e){ this.datapoints = [] }
+      if(this.activeTab === 'stats') this.$nextTick(()=>{ this.renderChart() })
+    }
   },
   beforeUnmount(){
     // revoke any object URLs we created
@@ -321,9 +594,13 @@ export default {
       this.mediaStream.getTracks().forEach(t => t.stop())
       this.mediaStream = null
     }
+    if(this.chart){ try{ this.chart.destroy() }catch(e){} this.chart = null }
   },
   computed: {
     player() {
+      if(this.athlete && (this.athlete.name || this.athlete.number !== undefined)){
+        return { name: this.athlete.name || 'Player', number: this.athlete.number || '--' }
+      }
       const id = String(this.$route.params.id || '1')
       return this.players.find(p => p.id === id) || { name: 'Player', number: '--' }
     }
@@ -335,4 +612,5 @@ export default {
 .video-placeholder{display:flex;align-items:center;justify-content:center;background:#f6f6f6}
 .play-icon{font-size:36px;color:#777}
 .card{height:100%}
+.table-container{max-height:320px;overflow:auto;border:1px solid #e5e7eb;border-radius:8px;padding:8px}
 </style>

@@ -4,6 +4,7 @@ import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import { getStorage } from "firebase/storage";
 import { getFirestore } from "firebase/firestore";
+import { getAuth } from 'firebase/auth'
 
 // TODO: Add SDKs for Firebase products that you want to use
 
@@ -38,6 +39,7 @@ const firebaseConfig = {
 let app
 let storage
 let db
+let auth
 try {
     if (firebaseConfig.apiKey) {
         app = initializeApp(firebaseConfig)
@@ -45,9 +47,10 @@ try {
         try { getAnalytics(app) } catch (e) { /* ignore in non-browser envs */ }
         storage = getStorage(app)
         db = getFirestore(app)
+        try { auth = getAuth(app) } catch(e) { /* ignore */ }
     }
 } catch (e) {
     // initialization failed (likely missing env vars); leave undefined
 }
 
-export { storage, db }
+export { storage, db, auth }
