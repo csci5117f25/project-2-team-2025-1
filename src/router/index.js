@@ -40,7 +40,11 @@ const routes = [
     path: '/player/:playerId/game/:gameId/edit',
     name: 'GameEditor',
     component: VideoPlayer,
-    props: true
+    props: route => ({
+      playerId: route.params.playerId,
+      gameId: route.params.gameId,
+      videoUrl: route.query.videoUrl || ''
+    })
   }
 ]
 

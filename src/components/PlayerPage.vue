@@ -10,7 +10,9 @@
           </div>
           <div class="media-content">
             <p class="title is-3">{{ player.name }}</p>
-            <p class="subtitle is-6"><strong>#{{ player.number }}</strong></p>
+            <p class="subtitle is-6" v-if="player.number && player.number !== '--'">Player ID #{{ player.number }}</p>
+            <p class="subtitle is-6" v-else-if="teamsList.length">{{ teamsList.length }} team{{ teamsList.length !== 1 ? 's' : '' }}</p>
+            <p class="subtitle is-6" v-else>No ID yet</p>
           </div>
         </div>
       </div>
@@ -28,39 +30,51 @@
       <div class="level">
         <div class="level-left">
           <div class="level-item">
-            <h2 class="title is-5">Highlights</h2>
+            <h2 class="title is-5">{{ activeTab === 'highlights' ? 'Highlights' : activeTab === 'games' ? 'Games' : 'Stats' }}</h2>
           </div>
         </div>
-        <div class="level-right">
-          <div class="level-item">
-            <button class="button is-primary" @click="openAddHighlight">Add Highlight</button>
-          </div>
-        </div>
+          <div class="level-right">
+              <div class="level-item">
+                <button v-if="activeTab === 'highlights'" class="button is-primary" @click="openAddVideo('highlight')">Add Highlight with Camera</button>
+                <button v-if="activeTab === 'games'" class="button is-primary" @click="openAddVideo('game')">Add Game with Camera</button>
+              </div>
+            </div>
       </div>
 
-      <div v-if="activeTab === 'highlights'" class="columns is-multiline">
-        <div class="column is-half" v-for="item in highlights" :key="item.id">
-          <div class="card">
-            <div class="card-image">
-              <figure class="image is-16by9 video-placeholder">
-                <template v-if="item.videoUrl">
-                  <video :src="item.videoUrl" controls style="width:100%;height:100%;object-fit:cover"></video>
-                </template>
-                <template v-else>
-                  <div class="play-icon">▶</div>
-                </template>
-              </figure>
-            </div>
-            <div class="card-content">
-              <p class="title is-6">{{ item.title }}</p>
-              <p class="subtitle is-7">{{ item.date }}</p>
+      <div v-if="activeTab === 'highlights'">
+        <div v-if="!highlights.length" class="notification is-light has-text-centered">
+          <strong>No highlights yet</strong>
+          <p>Add your first highlight using the "Add Highlight with Camera" button above.</p>
+        </div>
+        <div v-else class="columns is-multiline">
+          <div class="column is-half" v-for="item in highlights" :key="item.id">
+            <div class="card">
+              <div class="card-image">
+                <figure class="image is-16by9 video-placeholder">
+                  <template v-if="item.videoUrl">
+                    <video :src="item.videoUrl" controls style="width:100%;height:100%;object-fit:cover"></video>
+                  </template>
+                  <template v-else>
+                    <div class="play-icon">▶</div>
+                  </template>
+                </figure>
+              </div>
+              <div class="card-content">
+                <p class="title is-6">{{ item.title }}</p>
+                <p class="subtitle is-7">{{ item.date }}</p>
+                <button class="button is-small is-danger mt-2" @click="deleteHighlight(item.id)">Delete</button>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       <div v-if="activeTab === 'games'">
-        <div class="columns is-multiline">
+        <div v-if="!games.length" class="notification is-light has-text-centered">
+          <strong>No games yet</strong>
+          <p>Add your first game using the "Add Game with Camera" button above.</p>
+        </div>
+        <div v-else class="columns is-multiline">
           <div class="column is-half" v-for="game in games" :key="game.id">
             <div class="card">
               <div class="card-image">
@@ -76,12 +90,15 @@
               <div class="card-content">
                 <p class="title is-6">{{ game.title }}</p>
                 <p class="subtitle is-7">{{ game.date }}</p>
-                <router-link
-                  :to="{ name: 'GameEditor', params: { playerId: $route.params.id, gameId: game.id } }"
-                  class="button is-small is-primary is-outlined mt-2"
-                >
-                  Edit Game
-                </router-link>
+                <div class="buttons mt-2">
+                  <router-link
+                    :to="{ name: 'GameEditor', params: { playerId: $route.params.id, gameId: game.id }, query: { videoUrl: game.videoUrl || '' } }"
+                    class="button is-small is-primary is-outlined"
+                  >
+                    Edit Game
+                  </router-link>
+                  <button class="button is-small is-danger" @click="deleteGame(game.id)">Delete</button>
+                </div>
               </div>
             </div>
           </div>
@@ -90,319 +107,208 @@
 
       <div v-if="activeTab === 'stats'">
         <div class="box">
-          <div class="field is-horizontal">
-            <div class="field-label is-normal">
-              <label class="label">Stat</label>
-            </div>
-            <div class="field-body">
-              <div class="field">
-                <div class="control">
-                  <div class="select">
-                    <select v-model="selectedStat" @change="renderChart">
-                      <option v-for="s in statOptions" :key="s.key" :value="s.key">{{ s.label }}</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <canvas id="playerStatChart" style="width:100%;max-height:360px"></canvas>
-            <div class="box" style="margin-top:12px;white-space:pre-wrap">
-              <strong>datapoints:</strong>
-              <pre style="margin-top:6px">{{ JSON.stringify(datapoints, null, 2) }}</pre>
-            </div>
-          </div>
-        
-          <!-- Team selector and recent games table -->
-          <div class="field" style="margin-top:18px">
+          <div class="field">
             <label class="label">Team</label>
-            <div class="control">
-              <div class="select">
-                <select v-model="selectedTeamId" @change="loadRecentGamesForSelectedTeam">
-                  <option v-for="t in teamsList" :key="t.id" :value="t.id">{{ t.name }} {{ t.season ? '('+t.season+')' : '' }}</option>
-                </select>
+            <div class="field has-addons">
+              <div class="control is-expanded">
+                <div class="select is-fullwidth">
+                  <select v-model="selectedTeamId" @change="loadRecentGamesForSelectedTeam">
+                    <option disabled value="">Select a team</option>
+                    <option v-for="t in teamsList" :key="t.id" :value="t.id">{{ t.name }} {{ t.season ? '(' + t.season + ')' : '' }}</option>
+                  </select>
+                </div>
+              </div>
+              <div class="control">
+                <button class="button is-danger" @click="deleteTeam" :disabled="!selectedTeamId">Delete Team</button>
               </div>
             </div>
           </div>
 
-          <div class="recent-games table-container">
-            <table class="table is-fullwidth is-striped">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Opponent</th>
-                  <th>Home</th>
-                  <th>Away</th>
-                  <th>Stat</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="rg in recentGames" :key="rg.gameId">
-                  <td>{{ rg.date || 'TBD' }}</td>
-                  <td>{{ rg.opponent }}</td>
-                  <td>{{ rg.home }}</td>
-                  <td>{{ rg.away }}</td>
-                  <td>{{ (rg.stats && (rg.stats[selectedStat] !== undefined)) ? rg.stats[selectedStat] : '-' }}</td>
-                </tr>
-              </tbody>
-            </table>
+          <div v-if="!teamsList.length" class="notification is-light has-text-centered">
+            <strong>No teams found</strong>
+            <p>Link this athlete to a team to start tracking stats.</p>
           </div>
+          <div v-else-if="!recentGames.length" class="notification is-light has-text-centered">
+            <strong>No stats yet</strong>
+            <p>Once games are recorded for this team, they will appear here.</p>
+          </div>
+          <template v-else>
+            <div v-if="statSummary.length" class="table-container mb-5">
+              <table class="table is-fullwidth is-striped">
+                <thead>
+                  <tr>
+                    <th>Stat</th>
+                    <th>Total</th>
+                    <th>Average</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="item in statSummary" :key="item.key">
+                    <td>{{ formatStatLabel(item.key) }}</td>
+                    <td>{{ formatNumber(item.total) }}</td>
+                    <td>{{ formatNumber(item.average) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="recent-games table-container">
+              <table class="table is-fullwidth is-striped">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Opponent</th>
+                    <th>Home</th>
+                    <th>Away</th>
+                    <th v-for="key in statKeys" :key="'head-' + key">{{ formatStatLabel(key) }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="rg in recentGames" :key="rg.gameId">
+                    <td>{{ rg.date || 'TBD' }}</td>
+                    <td>{{ rg.opponent }}</td>
+                    <td>{{ rg.home }}</td>
+                    <td>{{ rg.away }}</td>
+                    <td v-for="key in statKeys" :key="rg.gameId + '-' + key">{{ displayStatValue(rg.stats, key) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </template>
         </div>
       </div>
 
-      <!-- Add Highlight Modal -->
-      <div class="modal" :class="{ 'is-active': showAddHighlight }">
-        <div class="modal-background" @click="closeAddHighlight"></div>
-        <div class="modal-card">
-          <header class="modal-card-head">
-            <p class="modal-card-title">Add Highlight</p>
-            <button class="delete" aria-label="close" @click="closeAddHighlight"></button>
-          </header>
-          <section class="modal-card-body">
-            <div class="tabs is-toggle is-fullwidth">
-              <ul>
-                <li :class="{ 'is-active': addTab === 'upload' }"><a @click.prevent="addTab='upload'">Upload</a></li>
-                <li :class="{ 'is-active': addTab === 'record' }"><a @click.prevent="addTab='record'">Record</a></li>
-              </ul>
-            </div>
-
-            <div v-if="addTab === 'upload'">
-              <div class="field">
-                <label class="label">Title</label>
-                <div class="control"><input class="input" v-model="highlightForm.title" placeholder="Highlight title" /></div>
-              </div>
-              <div class="field">
-                <label class="label">Video file</label>
-                <div class="control">
-                  <input type="file" accept="video/*" @change="onHighlightFileChange" />
-                </div>
-              </div>
-              <div v-if="highlightForm.previewUrl" class="box">
-                <video :src="highlightForm.previewUrl" controls style="width:100%;max-height:320px;object-fit:cover"></video>
-              </div>
-            </div>
-
-            <div v-if="addTab === 'record'">
-              <div class="field">
-                <label class="label">Title</label>
-                <div class="control"><input class="input" v-model="highlightForm.title" placeholder="Highlight title" /></div>
-              </div>
-              <div class="field">
-                <div class="control">
-                  <video ref="recPreview" autoplay playsinline muted style="width:100%;height:240px;background:#000"></video>
-                </div>
-              </div>
-              <div class="field is-grouped">
-                <div class="control">
-                  <button class="button is-danger" @click="startRecording" :disabled="recording">Start</button>
-                </div>
-                <div class="control">
-                  <button class="button" @click="stopRecording" :disabled="!recording">Stop</button>
-                </div>
-              </div>
-              <div v-if="highlightForm.previewUrl" class="box">
-                <p class="subtitle is-6">Recorded preview</p>
-                <video :src="highlightForm.previewUrl" controls style="width:100%;max-height:320px;object-fit:cover"></video>
-              </div>
-            </div>
-          </section>
-          <footer class="modal-card-foot">
-            <button class="button is-success" @click="submitHighlight">Save</button>
-            <button class="button" @click="closeAddHighlight">Cancel</button>
-          </footer>
-        </div>
-      </div>
+      <!-- Shared AddVideoModal uploader -->
+      <AddVideoModal
+        :show="showAddModal"
+        :videoType="videoType"
+        :playerId="$route.params.id"
+        @close="showAddModal = false"
+        @saved="handleVideoSaved"
+      />
     </section>
   </div>
 </template>
 
 <script>
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore'
+import AddVideoModal from './AddVideoModal.vue'
+import { doc, getDoc, collection, getDocs, query, where, deleteDoc, updateDoc } from 'firebase/firestore'
 import { db, auth } from '../firebase.js'
 import { onAuthStateChanged } from 'firebase/auth'
 
 export default {
+  components: { AddVideoModal },
   name: 'PlayerPage',
   data() {
     return {
-      players: [
-        { id: '1', name: 'PLAYER', number: '0' },
-        { id: '2', name: 'PLAYER 2', number: '2' },
-        { id: '3', name: 'PLAYER 3', number: '3' },
-        { id: '4', name: 'REESE', number: '4' },
-        { id: '5', name: 'JACK H.', number: '5' }
-      ],
-      highlights: [
-        { id: 1, title: 'A vs B', date: '3/4/25', videoUrl: null },
-        { id: 2, title: 'C vs D', date: '4/9/25', videoUrl: null },
-        { id: 3, title: 'E vs F', date: '1/2/25', videoUrl: null },
-        { id: 4, title: 'G vs H', date: '2/12/25', videoUrl: null }
-      ],
-      games: [
-        { id: 1, title: 'Roseville vs Woodbridge', date: '3/4/21', videoUrl: null },
-        { id: 2, title: 'Roseville vs CDM', date: '4/9/24', videoUrl: null },
-        { id: 3, title: 'Roseville vs CJW', date: '1/2/23', videoUrl: null },
-        { id: 4, title: 'Roseville vs ...', date: '', videoUrl: null }
-      ],
+      players: [],
+      highlights: [],
+      games: [],
       activeTab: 'highlights',
-      showAddHighlight: false,
-      addTab: 'upload',
-      highlightForm: {
-        title: '',
-        date: '',
-        file: null,
-        previewUrl: null
-      },
-      recording: false,
-      mediaStream: null,
-      mediaRecorder: null,
-      recordedChunks: [],
-      createdUrls: [],
-      // team & recent games
+      showAddModal: false,
+      videoType: 'highlight',
       teamsList: [],
-      selectedTeamId: null,
+      selectedTeamId: '',
       recentGames: [],
-      teamStatKeys: [],
-      athlete: null,
-      datapoints: [],
-      // chart/stat state
-      statOptions: [
-        { key: 'points', label: 'Points' },
-        { key: 'rebounds', label: 'Rebounds' },
-        { key: 'assists', label: 'Assists' },
-        { key: 'turnovers', label: 'Turnovers' },
-        { key: 'fga', label: 'Field Goal Attempts' },
-        { key: 'fgm', label: 'Field Goals Made' },
-        { key: 'two_pa', label: '2-Point Attempts' },
-        { key: 'two_pm', label: '2-Points Made' },
-        { key: 'three_pa', label: '3-Point Attempts' },
-        { key: 'three_pm', label: '3-Points Made' },
-        { key: 'fouls', label: 'Fouls' }
-      ],
-      selectedStat: 'points',
-      chart: null
+      statKeys: [],
+      statSummary: [],
+      athlete: null
     }
   },
   async mounted(){
     await this.loadTeamsForPlayer()
+    await this.loadHighlights()
+    await this.loadGames()
   },
   methods: {
-    setTab(tab){
+    async setTab(tab){
       this.activeTab = tab
       if(tab === 'stats'){
-        // render chart shortly after DOM updates
-        this.$nextTick(()=>{ this.renderChart() })
+        try{
+          await this.loadTeamsForPlayer()
+        }catch(e){ console.warn('Error preparing stats tab', e) }
       }
     },
-    openAddHighlight(){
-      this.showAddHighlight = true
-      this.addTab = 'upload'
-      this.highlightForm = { title: '', date: new Date().toLocaleDateString(), file: null, previewUrl: null }
+    openAddVideo(type){
+      this.videoType = type || 'highlight'
+      this.showAddModal = true
     },
-    closeAddHighlight(){
-      this.showAddHighlight = false
-      // stop camera if active
-      if(this.mediaRecorder && this.recording){
-        this.mediaRecorder.stop()
-      }
-      if(this.mediaStream){
-        this.mediaStream.getTracks().forEach(t => t.stop())
-        this.mediaStream = null
-      }
-      // revoke preview URL if it was created during modal
-      if(this.highlightForm && this.highlightForm.previewUrl && this.createdUrls.includes(this.highlightForm.previewUrl)){
-        URL.revokeObjectURL(this.highlightForm.previewUrl)
-        this.createdUrls = this.createdUrls.filter(u => u !== this.highlightForm.previewUrl)
-      }
-      this.highlightForm = { title: '', date: '', file: null, previewUrl: null }
-      this.recording = false
+    async handleVideoSaved(type){
+      // refresh lists after upload
+      await this.loadHighlights()
+      await this.loadGames()
+      this.showAddModal = false
     },
-    onHighlightFileChange(e){
-      const file = e.target.files && e.target.files[0]
-      if(!file) return
-      this.highlightForm.file = file
-      if(this.highlightForm.previewUrl && this.createdUrls.includes(this.highlightForm.previewUrl)){
-        URL.revokeObjectURL(this.highlightForm.previewUrl)
-        this.createdUrls = this.createdUrls.filter(u => u !== this.highlightForm.previewUrl)
-      }
-      const url = URL.createObjectURL(file)
-      this.highlightForm.previewUrl = url
-      this.createdUrls.push(url)
-    },
-    async submitHighlight(){
-      const id = Date.now()
-      const title = this.highlightForm.title || 'Highlight'
-      const date = this.highlightForm.date || new Date().toLocaleDateString()
-
-      // upload to fire and get link
-      let finalUrl = this.highlightForm.previewUrl || null
+    async loadHighlights(){
       try{
-        if(this.highlightForm.file){
-          const { ref: storageRef, uploadBytes, getDownloadURL } = await import('firebase/storage')
-          const { storage, db } = await import('../firebase.js')
-          const path = `players/${this.$route.params.id || 'unknown'}/highlights/${id}`
-          const r = storageRef(storage, path)
-          await uploadBytes(r, this.highlightForm.file)
-          finalUrl = await getDownloadURL(r)
-
-          // save metadata to Firestore
-          const { doc, setDoc, collection } = await import('firebase/firestore')
-          const docRef = doc(collection(db, 'highlights'), String(id))
-          await setDoc(docRef, {
-            id: String(id),
-            playerId: String(this.$route.params.id || '1'),
-            title,
-            date,
-            videoUrl: finalUrl,
-            createdAt: new Date().toISOString()
-          })
-        }
-      }catch(err){
-        console.error('Upload failed', err)
-        alert('Upload failed: ' + (err && err.message))
-      }
-
-      this.highlights.unshift({ id, title, date, videoUrl: finalUrl })
-      this.closeAddHighlight()
+        const playerId = String(this.$route.params.id || '1')
+        const q = query(collection(db, 'highlights'), where('playerId', '==', playerId))
+        const snap = await getDocs(q)
+        const items = []
+        snap.forEach(d => items.push(Object.assign({ id: d.id }, d.data())))
+        // sort newest first
+        items.sort((a,b)=>{ const ta = a.createdAt ? Date.parse(a.createdAt) : 0; const tb = b.createdAt ? Date.parse(b.createdAt) : 0; return tb - ta })
+        this.highlights = items
+      }catch(e){ console.warn('loadHighlights failed', e) }
     },
-    async startRecording(){
+    async loadGames(){
       try{
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-        this.mediaStream = stream
-        const videoEl = this.$refs.recPreview
-        if(videoEl){
-          videoEl.srcObject = stream
-        }
-        this.recordedChunks = []
-        this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' })
-        this.mediaRecorder.ondataavailable = (e) => { if(e.data && e.data.size) this.recordedChunks.push(e.data) }
-        this.mediaRecorder.onstop = () => {
-          const blob = new Blob(this.recordedChunks, { type: 'video/webm' })
-          const url = URL.createObjectURL(blob)
-          this.highlightForm.previewUrl = url
-          this.createdUrls.push(url)
-        }
-        this.mediaRecorder.start()
-        this.recording = true
-      }catch(err){
-        console.error('Camera error', err)
-        alert('Unable to access camera: ' + (err && err.message))
-      }
+        const playerId = String(this.$route.params.id || '1')
+        const q = query(collection(db, 'games'), where('playerId', '==', playerId))
+        const snap = await getDocs(q)
+        const items = []
+        snap.forEach(d => items.push(Object.assign({ id: d.id }, d.data())))
+        items.sort((a,b)=>{ const ta = a.createdAt ? Date.parse(a.createdAt) : 0; const tb = b.createdAt ? Date.parse(b.createdAt) : 0; return tb - ta })
+        this.games = items
+      }catch(e){ console.warn('loadGames failed', e) }
     },
-    stopRecording(){
-      if(this.mediaRecorder && this.recording){
-        this.mediaRecorder.stop()
-      }
-      if(this.mediaStream){
-        this.mediaStream.getTracks().forEach(t => t.stop())
-        this.mediaStream = null
-      }
-      this.recording = false
-    }
+    async deleteHighlight(id){
+      try{
+        if(!confirm('Are you sure you want to delete this highlight?')) return
+        await deleteDoc(doc(db, 'highlights', String(id)))
+        await this.loadHighlights()
+      }catch(e){ alert('Failed to delete highlight: ' + (e && e.message)) }
+    },
+    async deleteGame(id){
+      try{
+        if(!confirm('Are you sure you want to delete this game?')) return
+        await deleteDoc(doc(db, 'games', String(id)))
+        await this.loadGames()
+      }catch(e){ alert('Failed to delete game: ' + (e && e.message)) }
+    },
+    async deleteTeam(){
+      try{
+        if(!this.selectedTeamId) return
+        const teamName = this.teamsList.find(t => t.id === this.selectedTeamId)?.name || 'this team'
+        if(!confirm(`Are you sure you want to remove ${teamName} from this athlete? This will not delete the team itself, only unlink it from this athlete.`)) return
 
-    ,
+        const playerId = String(this.$route.params.id || '1')
+        let uid = auth && auth.currentUser && auth.currentUser.uid
+        if(!uid){ uid = await new Promise(resolve=>{ const unsub = onAuthStateChanged(auth,(u)=>{ unsub(); resolve(u?u.uid:null) }) }) }
+        if(!uid) return
+
+        const athleteRef = doc(db, 'users', String(uid), 'athletes', String(playerId))
+        const athleteSnap = await getDoc(athleteRef)
+        if(!athleteSnap.exists()) return
+
+        const athlete = athleteSnap.data()
+        const teamRefs = athlete.team || []
+        const updatedTeamRefs = teamRefs.filter(tr => {
+          try{
+            const path = tr && tr.path ? tr.path : (tr && tr._path && tr._path.segments && tr._path.segments.join('/'))
+            return !path || !path.includes(`/Teams/${this.selectedTeamId}`)
+          }catch(e){ return true }
+        })
+
+        await updateDoc(athleteRef, { team: updatedTeamRefs })
+
+        this.selectedTeamId = ''
+        this.recentGames = []
+        this.statKeys = []
+        this.statSummary = []
+        await this.loadTeamsForPlayer()
+      }catch(e){ alert('Failed to delete team: ' + (e && e.message)) }
+    },
     async ensureChartJs(){
       if(window && window.Chart) return Promise.resolve()
       return new Promise((resolve, reject) => {
@@ -413,37 +319,12 @@ export default {
         document.head.appendChild(s)
       })
     },
-
-    getPlayerStatFromGame(game, playerId, statKey){
-      if(!game) return null
-      const tryContainers = ['players','playerStats','stats','playersData']
-      for(const c of tryContainers){
-        const cont = game[c]
-        if(!cont) continue
-        if(Array.isArray(cont)){
-          const found = cont.find(p => String(p.athleteId || p.id) === String(playerId))
-          if(found && (statKey in found)) return found[statKey]
-        } else if(typeof cont === 'object'){
-          // keyed by athlete id
-          const item = cont[String(playerId)] || cont[playerId]
-          if(item && (statKey in item)) return item[statKey]
-        }
-      }
-      // fallback: maybe game has top-level mapping by player id
-      if(game[String(playerId)]){
-        const it = game[String(playerId)]
-        if(statKey in it) return it[statKey]
-      }
-      return null
-    },
-
     async renderChart(){
       try{
         await this.ensureChartJs()
         const canvas = document.getElementById('playerStatChart')
         if(!canvas) return
 
-        // prepare points: datapoints must have x (order) and Stat (y)
         const pts = (this.datapoints || []).map(d => ({
           x: d.x !== undefined ? d.x : null,
           y: (d.Stat !== null && d.Stat !== undefined) ? Number(d.Stat) : null,
@@ -452,31 +333,62 @@ export default {
 
         if(this.chart){ try{ this.chart.destroy() }catch(e){} this.chart = null }
 
-        this.chart = new Chart(canvas.getContext('2d'), {
-          type: 'scatter',
-          data: {
-            datasets: [{ label: (this.selectedStat || 'stat'), data: pts, backgroundColor: '#2563eb' }]
-          },
-          options: {
-            scales: {
-              x: { type: 'linear', title: { display: true, text: 'Game (oldest → newest)' }, ticks: { stepSize: 1 } },
-              y: { beginAtZero: true, title: { display: true, text: 'Value' } }
-            },
-            plugins: {
-              tooltip: {
-                callbacks: {
-                  label: function(context){
-                    const r = context.raw || {}
-                    return `${r.date ? r.date + ' — ' : ''}Value: ${r.y}`
+        const ctx = (canvas && canvas.getContext) ? canvas.getContext('2d') : null
+        try{
+          if(ctx){
+            this.chart = new window.Chart(ctx, {
+              type: 'scatter',
+              data: {
+                datasets: [{ label: (this.selectedStat || 'stat'), data: pts, backgroundColor: '#2563eb' }]
+              },
+              options: {
+                scales: {
+                  x: { type: 'linear', title: { display: true, text: 'Game (oldest → newest)' }, ticks: { stepSize: 1 } },
+                  y: { beginAtZero: true, title: { display: true, text: 'Value' } }
+                },
+                plugins: {
+                  tooltip: {
+                    callbacks: {
+                      label: function(context){
+                        const r = context.raw || {}
+                        return `${r.date ? r.date + ' — ' : ''}Value: ${r.y}`
+                      }
+                    }
                   }
                 }
               }
-            }
+            })
+          } else {
+            // fallback: try passing canvas element directly
+            this.chart = new window.Chart(canvas, {
+              type: 'scatter',
+              data: {
+                datasets: [{ label: (this.selectedStat || 'stat'), data: pts, backgroundColor: '#2563eb' }]
+              },
+              options: {
+                scales: {
+                  x: { type: 'linear', title: { display: true, text: 'Game (oldest → newest)' }, ticks: { stepSize: 1 } },
+                  y: { beginAtZero: true, title: { display: true, text: 'Value' } }
+                },
+                plugins: {
+                  tooltip: {
+                    callbacks: {
+                      label: function(context){
+                        const r = context.raw || {}
+                        return `${r.date ? r.date + ' — ' : ''}Value: ${r.y}`
+                      }
+                    }
+                  }
+                }
+              }
+            })
           }
-        })
+        }catch(e){
+          console.warn('Chart init failed, context available:', !!ctx, e)
+          return
+        }
       }catch(err){ console.warn('Chart build failed', err) }
-    }
-    ,
+    },
     async loadTeamsForPlayer(){
       try{
         const playerId = String(this.$route.params.id || '1')
@@ -501,10 +413,11 @@ export default {
         if(list.length>0){ this.selectedTeamId = this.selectedTeamId || String(list[0].id); await this.loadRecentGamesForSelectedTeam() }
       }catch(err){ console.warn('Failed to load teams for player', err) }
     },
-
     async loadRecentGamesForSelectedTeam(){
       try{
         this.recentGames = []
+        this.statKeys = []
+        this.statSummary = []
         const playerId = String(this.$route.params.id || '1')
         const teamId = this.selectedTeamId
         if(!teamId) return
@@ -523,6 +436,8 @@ export default {
         })
 
         const rows = []
+        const allKeysSet = new Set()
+        const numericKeysSet = new Set()
         for(const gref of filtered){
           try{
             const gSnap = await getDoc(gref)
@@ -530,71 +445,70 @@ export default {
             const g = { id: gSnap.id, ...gSnap.data() }
             const playerDocRef = doc(db, 'users', String(uid), 'Teams', String(teamId), 'games', String(g.id), 'players', String(playerId))
             const pSnap = await getDoc(playerDocRef)
-            const stats = pSnap.exists() ? pSnap.data() : {}
-            rows.push(Object.assign({ gameId: g.id, date: g.date || null, opponent: g.opponent || '', home: g.home || 0, away: g.away || 0, stats }, {}))
+            const rawStats = pSnap.exists() ? pSnap.data() : {}
+            const cleanedStats = {}
+            for (const key in rawStats){
+              if(!Object.prototype.hasOwnProperty.call(rawStats, key)) continue
+              if(key === 'athleteId' || key === 'playerId') continue
+              const value = rawStats[key]
+              if(value === null || value === undefined) continue
+              cleanedStats[key] = value
+              allKeysSet.add(key)
+              if(typeof value === 'number') numericKeysSet.add(key)
+            }
+            rows.push({
+              gameId: g.id,
+              date: g.date || null,
+              opponent: g.opponent || '',
+              home: g.home || 0,
+              away: g.away || 0,
+              stats: cleanedStats
+            })
           }catch(e){ console.warn('failed reading game ref', e); continue }
         }
 
         rows.sort((a,b)=>{
           const da = Date.parse(a.date) || 0
-          const db = Date.parse(b.date) || 0
-          return db - da
+          const dateB = Date.parse(b.date) || 0
+          return dateB - da
         })
 
-        this.recentGames = rows.slice(0,10)
-        // build datapoints array from the table rows for the selected stat
-        try{
-          this.datapoints = this.recentGames.map(r => ({ date: r.date || null, Stat: (r.stats && r.stats[this.selectedStat] !== undefined) ? r.stats[this.selectedStat] : null }))
-
-          // compute x ordering (oldest => 1)
-          const parsed = this.datapoints.map(d => ({ ...d, _ts: d.date ? Date.parse(d.date) : null }))
-          const sortedTimes = parsed.map(p => p._ts).filter(t => t !== null).sort((a,b)=>a-b)
-          const maxIndex = sortedTimes.length
-          this.datapoints = parsed.map(p => {
-            const x = p._ts !== null ? (sortedTimes.indexOf(p._ts) + 1) : (maxIndex + 1)
-            return { date: p.date || null, Stat: p.Stat, x }
-          })
-        }catch(e){ this.datapoints = [] }
-        // render chart from table values when available
-        if(this.recentGames && this.recentGames.length){
-
-
-
-
-          
-          this.$nextTick(()=>{ if(this.activeTab === 'stats') this.renderChart() })
-        } else {
-          if(this.chart){ try{ this.chart.destroy() }catch(e){} this.chart = null }
+        const trimmed = rows.slice(0, 10)
+        this.recentGames = trimmed
+        const totals = {}
+        for(const game of trimmed){
+          const stats = game.stats || {}
+          for(const key of Object.keys(stats)){
+            if(typeof stats[key] !== 'number') continue
+            totals[key] = (totals[key] || 0) + stats[key]
+          }
         }
+        this.statKeys = Array.from(allKeysSet)
+        const gameCount = trimmed.length
+        this.statSummary = Array.from(numericKeysSet).map(key => ({
+          key,
+          total: totals[key] || 0,
+          average: gameCount ? (totals[key] || 0) / gameCount : 0
+        }))
       }catch(err){ console.error('Failed to load recent games', err) }
+    },
+    formatStatLabel(key){
+      if(!key) return ''
+      return key
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (char) => char.toUpperCase())
+    },
+    formatNumber(value){
+      if(value === null || value === undefined || Number.isNaN(value)) return '-'
+      const num = Number(value)
+      if(Number.isNaN(num)) return '-'
+      return Number.isInteger(num) ? num : num.toFixed(1)
+    },
+    displayStatValue(stats, key){
+      if(!stats || stats[key] === null || stats[key] === undefined) return '-'
+      const value = stats[key]
+      return typeof value === 'number' ? this.formatNumber(value) : value
     }
-  },
-  watch: {
-    selectedStat(newVal){
-      try{
-        const base = (this.recentGames || []).map(r => ({ date: r.date || null, Stat: (r.stats && r.stats[newVal] !== undefined) ? r.stats[newVal] : null }))
-        const parsed = base.map(d => ({ ...d, _ts: d.date ? Date.parse(d.date) : null }))
-        const sorted = parsed.map(p => p._ts).filter(t => t !== null).sort((a,b)=>a-b)
-        const maxIndex = sorted.length
-        this.datapoints = parsed.map(p => {
-          const x = p._ts !== null ? (sorted.indexOf(p._ts) + 1) : (maxIndex + 1)
-          return { date: p.date || null, Stat: p.Stat, x }
-        })
-      }catch(e){ this.datapoints = [] }
-      if(this.activeTab === 'stats') this.$nextTick(()=>{ this.renderChart() })
-    }
-  },
-  beforeUnmount(){
-    // revoke any object URLs we created
-    if(this.createdUrls && this.createdUrls.length){
-      this.createdUrls.forEach(u => { try{ URL.revokeObjectURL(u) }catch(e){} })
-      this.createdUrls = []
-    }
-    if(this.mediaStream){
-      this.mediaStream.getTracks().forEach(t => t.stop())
-      this.mediaStream = null
-    }
-    if(this.chart){ try{ this.chart.destroy() }catch(e){} this.chart = null }
   },
   computed: {
     player() {

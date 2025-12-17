@@ -40,15 +40,15 @@
       <!-- Action Buttons -->
       <div class="action-buttons">
         <button class="btn btn-edit-team" @click="openAddModal">EDIT TEAM</button>
-        <button class="btn btn-add-player">ADD PLAYER</button>
+        <button class="btn btn-add-player" @click="openCreatePlayerModal">ADD PLAYER</button>
       </div>
 
-      <!-- Add Player Modal -->
+      <!-- Add Existing Player Modal -->
       <div class="modal" :class="{ 'is-active': showAddModal }" v-if="showAddModal">
         <div class="modal-background" @click="closeModal"></div>
         <div class="modal-card">
           <header class="modal-card-head">
-            <p class="modal-card-title">Add Player</p>
+            <p class="modal-card-title">Add Existing Player</p>
             <button class="delete" aria-label="close" @click="closeModal"></button>
           </header>
           <section class="modal-card-body">
@@ -75,6 +75,44 @@
           </footer>
         </div>
       </div>
+
+      <!-- Create New Player Modal -->
+      <div class="modal" :class="{ 'is-active': showCreatePlayerModal }" v-if="showCreatePlayerModal">
+        <div class="modal-background" @click="closeCreatePlayerModal"></div>
+        <div class="modal-card">
+          <header class="modal-card-head">
+            <p class="modal-card-title">Create New Player</p>
+            <button class="delete" aria-label="close" @click="closeCreatePlayerModal"></button>
+          </header>
+          <section class="modal-card-body">
+            <div class="field">
+              <label class="label">Name *</label>
+              <div class="control">
+                <input class="input" type="text" placeholder="Player name" v-model="newPlayer.name" />
+              </div>
+            </div>
+            <div class="field">
+              <label class="label">Email</label>
+              <div class="control">
+                <input class="input" type="email" placeholder="player@example.com" v-model="newPlayer.email" />
+              </div>
+            </div>
+            <div class="field">
+              <label class="label">Photo</label>
+              <div class="control">
+                <input type="file" accept="image/*" @change="onFileChange" />
+              </div>
+              <div v-if="newPlayer.photo" class="box mt-2">
+                <img :src="newPlayer.photo" style="width:100px;height:100px;object-fit:cover;border-radius:50%;" alt="Preview" />
+              </div>
+            </div>
+          </section>
+          <footer class="modal-card-foot">
+            <button class="button is-success" @click="createNewPlayer" :disabled="!newPlayer.name">Create Player</button>
+            <button class="button" @click="closeCreatePlayerModal">Cancel</button>
+          </footer>
+        </div>
+      </div>
     </main>
   </div>
 </template>
@@ -93,14 +131,15 @@ export default {
       players: [],
       loading: true,
       showAddModal: false,
-      
+      showCreatePlayerModal: false,
+
       allAthletes: [],
       allAthletesCache: [],
       searchText: '',
       searchTimeout: null,
       createdUrls: [],
-      newPlayer: { name: '', photo: null, file: null },
-      
+      newPlayer: { name: '', email: '', photo: null, file: null },
+
       newGame: {
         opponent: '',
         date: '',
@@ -172,45 +211,82 @@ export default {
     },
     closeModal(){
       this.showAddModal = false
+      this.searchText = ''
+    },
+    openCreatePlayerModal(){
+      this.showCreatePlayerModal = true
+      this.newPlayer = { name: '', email: '', photo: null, file: null }
+    },
+    closeCreatePlayerModal(){
+      this.showCreatePlayerModal = false
       if(this.newPlayer.photo && this.createdUrls.includes(this.newPlayer.photo)){
         URL.revokeObjectURL(this.newPlayer.photo)
         this.createdUrls = this.createdUrls.filter(u => u !== this.newPlayer.photo)
       }
-      this.newPlayer = { name: '', photo: null, file: null }
+      this.newPlayer = { name: '', email: '', photo: null, file: null }
     },
-    async addPlayer(){
-      const id = Date.now()
-      const name = this.newPlayer.name || 'Player'
-      let photoUrl = this.newPlayer.photo || null
-      {
+    async createNewPlayer(){
+      if(!this.newPlayer.name || !this.newPlayer.name.trim()){
+        alert('Please enter a player name')
+        return
+      }
+
+      try {
+        const id = Date.now()
+        const name = this.newPlayer.name.trim()
+        const email = this.newPlayer.email.trim()
+        let photoUrl = null
+
+        // Upload photo if provided
         if(this.newPlayer.file){
           const { ref: storageRef, uploadBytes, getDownloadURL } = await import('firebase/storage')
           const { storage } = await import('../firebase.js')
           const ext = (this.newPlayer.file.name || '').split('.').pop() || 'jpg'
           const path = `players/${id}/avatar.${ext}`
           const r = storageRef(storage, path)
+          console.log('Uploading player photo...')
           await uploadBytes(r, this.newPlayer.file)
           photoUrl = await getDownloadURL(r)
-
-          const { doc, setDoc, collection } = await import('firebase/firestore')
-          // require authenticated user and write athlete into users/{uid}/athletes
-          const uidForWrite = this.teamOwnerUid || (auth && auth.currentUser && auth.currentUser.uid)
-          if(!uidForWrite) throw new Error('Must be signed in to create an athlete')
-          const athletesColRef = collection(db, 'users', String(uidForWrite), 'athletes')
-          const docRef = doc(athletesColRef, String(id))
-          const teamRefForPlayer = doc(db, 'users', String(uidForWrite), 'Teams', this.team.id)
-          await setDoc(docRef, {
-            id: String(id),
-            name,
-            photo: photoUrl,
-            createdAt: new Date().toISOString(),
-            team: [ teamRefForPlayer ]
-          })
+          console.log('Photo uploaded:', photoUrl)
         }
-      }
 
-      this.players.unshift({ id: String(id), name, photo: photoUrl })
-      this.closeModal()
+        // Create athlete in Firestore
+        const { doc, setDoc, collection } = await import('firebase/firestore')
+        const uidForWrite = this.teamOwnerUid || (auth && auth.currentUser && auth.currentUser.uid)
+        if(!uidForWrite) throw new Error('Must be signed in to create an athlete')
+
+        const athletesColRef = collection(db, 'users', String(uidForWrite), 'athletes')
+        const docRef = doc(athletesColRef, String(id))
+        const teamRefForPlayer = doc(db, 'users', String(uidForWrite), 'Teams', this.team.id)
+
+        const playerData = {
+          id: String(id),
+          name,
+          photo: photoUrl,
+          createdAt: new Date().toISOString(),
+          team: [ teamRefForPlayer ]
+        }
+
+        // Add email if provided
+        if(email) {
+          playerData.email = email
+        }
+
+        console.log('Creating player in Firestore...', playerData)
+        await setDoc(docRef, playerData)
+        console.log('Player created successfully!')
+
+        // Add to local players list
+        this.players.unshift({ id: String(id), name, email, photo: photoUrl })
+
+        // Refresh cache
+        this.allAthletesCache = []
+
+        this.closeCreatePlayerModal()
+      } catch(err) {
+        console.error('Failed to create player:', err)
+        alert('Failed to create player: ' + (err && err.message))
+      }
     },
 
     

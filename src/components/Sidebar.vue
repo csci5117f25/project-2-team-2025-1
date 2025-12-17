@@ -10,9 +10,12 @@
     <div v-else-if="teams && teams.length === 0" class="muted">No teams</div>
     <ul v-else class="team-list">
       <li v-for="t in teams" :key="t.id" class="team-item">
-        <button class="team-btn" @click="selectTeam(t)">
-          {{ getName(t) }}
-        </button>
+        <div class="team-row">
+          <button class="team-btn" @click="selectTeam(t)">
+            {{ getName(t) }}
+          </button>
+          <button class="btn-delete" @click="deleteTeam(t)" title="Delete team">×</button>
+        </div>
       </li>
     </ul>
 
@@ -63,7 +66,7 @@
 
 <script setup>
 import { computed, ref, onMounted } from 'vue'
-import { collection, query, orderBy, addDoc, getDocs, where } from 'firebase/firestore'
+import { collection, query, orderBy, addDoc, getDocs, where, doc, deleteDoc } from 'firebase/firestore'
 import { db, auth } from '../firebase.js'
 import { GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth'
 import { useRouter } from 'vue-router'
@@ -212,6 +215,24 @@ async function onCreate(){
     alert('Failed to create team: '+(err && err.message))
   }
 }
+
+async function deleteTeam(team){
+  try{
+    const teamName = getName(team)
+    if(!confirm(`Are you sure you want to delete "${teamName}"? This will permanently delete the team and all associated data.`)) return
+
+    if(!currentUser.value || !currentUser.value.uid) return
+
+    const teamId = team.id
+    if(!teamId) return
+
+    await deleteDoc(doc(db, 'users', String(currentUser.value.uid), 'Teams', String(teamId)))
+    await loadTeamsForUid(currentUser.value.uid)
+  }catch(err){
+    console.error('Delete team failed', err)
+    alert('Failed to delete team: '+(err && err.message))
+  }
+}
 </script>
 
 <style scoped>
@@ -222,8 +243,11 @@ async function onCreate(){
 .brand{margin:0 0 10px 0;font-weight:600}
 .team-list{list-style:none;padding:0;margin:0}
 .team-item{margin:6px 0}
-.team-btn{width:100%;text-align:left;background:transparent;border:none;color:inherit;padding:8px;border-radius:6px;cursor:pointer}
+.team-row{display:flex;align-items:center;gap:4px}
+.team-btn{flex:1;text-align:left;background:transparent;border:none;color:inherit;padding:8px;border-radius:6px;cursor:pointer}
 .team-btn:hover{background:rgba(255,255,255,0.03)}
+.btn-delete{background:transparent;border:1px solid rgba(255,255,255,0.1);color:#ef4444;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:16px;line-height:1;min-width:28px}
+.btn-delete:hover{background:rgba(239,68,68,0.1);border-color:#ef4444}
 .muted{color:#9ca3af}
 .modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.45);z-index:40}
 .team-modal-card{background:#0b0b0b;color:#d1d5db;width:420px;border-radius:8px;padding:14px}
