@@ -55,10 +55,18 @@
         </div>
       </section>
       <footer class="modal-card-foot">
-        <button class="button is-success" @click="submit" :disabled="uploading">
-          {{ uploading ? 'Uploading...' : 'Save' }}
-        </button>
-        <button class="button" @click="close" :disabled="uploading">Cancel</button>
+        <div style="width: 100%;">
+          <div v-if="uploading" class="mb-3">
+            <progress class="progress is-primary" :value="uploadProgress" max="100">{{ uploadProgress }}%</progress>
+            <p class="has-text-centered">{{ uploadProgress }}%</p>
+          </div>
+          <div class="buttons">
+            <button class="button is-success" @click="submit" :disabled="uploading">
+              {{ uploading ? 'Uploading...' : 'Save' }}
+            </button>
+            <button class="button" @click="close" :disabled="uploading">Cancel</button>
+          </div>
+        </div>
       </footer>
     </div>
   </div>
@@ -83,6 +91,7 @@ export default {
       },
       recording: false,
       uploading: false,
+      uploadProgress: 0,
       mediaStream: null,
       mediaRecorder: null,
       recordedChunks: [],
@@ -123,6 +132,7 @@ export default {
       if (this.uploading) return
 
       this.uploading = true
+      this.uploadProgress = 0
       const id = Date.now()
       const title = this.form.title || (this.videoType === 'highlight' ? 'Highlight' : 'Game')
       const date = new Date().toLocaleDateString()
@@ -130,14 +140,33 @@ export default {
 
       try {
         if (this.form.file) {
-          const { ref: storageRef, uploadBytes, getDownloadURL } = await import('firebase/storage')
-          const { storage, db } = await import('../firebase.js')
+          const { useFirestore } = await import('vuefire')
+          const { ref: storageRef, uploadBytesResumable, getDownloadURL } = await import('firebase/storage')
+          const { doc, setDoc, collection } = await import('firebase/firestore')
+          const { storage } = await import('../firebase.js')
+
+          const db = useFirestore()
           const path = `players/${this.playerId || 'unknown'}/${collectionName}/${id}`
           const r = storageRef(storage, path)
-          await uploadBytes(r, this.form.file)
+
+          const uploadTask = uploadBytesResumable(r, this.form.file)
+
+          await new Promise((resolve, reject) => {
+            uploadTask.on('state_changed',
+              (snapshot) => {
+                this.uploadProgress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)
+              },
+              (error) => {
+                reject(error)
+              },
+              () => {
+                resolve()
+              }
+            )
+          })
+
           const finalUrl = await getDownloadURL(r)
 
-          const { doc, setDoc, collection } = await import('firebase/firestore')
           const docRef = doc(collection(db, collectionName), String(id))
           await setDoc(docRef, {
             id: String(id),
@@ -152,6 +181,7 @@ export default {
         alert('Upload failed: ' + (err && err.message))
       } finally {
         this.uploading = false
+        this.uploadProgress = 0
       }
 
       this.$emit('saved', this.videoType)

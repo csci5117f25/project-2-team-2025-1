@@ -26,21 +26,22 @@
         <h2 class="section-title">ATHLETES</h2>
 
         <div class="player-list" v-if="players.length > 0">
-          <router-link
-            class="player-item"
-            v-for="player in players"
-            :key="player.id"
-            :to="{ name: 'Player', params: { teamId: $route.params.teamId, id: player.id } }"
-          >
-            <div class="player-icon">
-              <img v-if="player.photo" :src="player.photo" alt="player" class="player-photo" />
-              <svg v-else width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="8" r="4"/>
-                <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
-              </svg>
-            </div>
-            <span class="player-name">{{ player.name }}</span>
-          </router-link>
+          <div class="player-item-wrapper" v-for="player in players" :key="player.id">
+            <router-link
+              class="player-item"
+              :to="{ name: 'Player', params: { teamId: $route.params.teamId, id: player.id } }"
+            >
+              <div class="player-icon">
+                <img v-if="player.photo" :src="player.photo" alt="player" class="player-photo" />
+                <svg v-else width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="8" r="4"/>
+                  <path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>
+                </svg>
+              </div>
+              <span class="player-name">{{ player.name }}</span>
+            </router-link>
+            <button class="button is-small is-danger delete-player-btn" @click="deletePlayer(player.id)">Delete</button>
+          </div>
         </div>
         <div v-else class="notification is-light has-text-centered">
           No players yet. Click "ADD PLAYER" below.
@@ -49,7 +50,7 @@
 
       <!-- Action Buttons -->
       <div class="action-buttons">
-        <button class="btn btn-new-game">NEW GAME</button>
+        <!-- <button class="btn btn-new-game">NEW GAME</button> -->
         <button class="btn btn-add-player" @click="showModal = true">ADD PLAYER</button>
       </div>
 
@@ -89,17 +90,25 @@
 </template>
 
 <script>
-import { collection, getDocs, doc, setDoc, getDoc, query, where } from 'firebase/firestore'
+import { useCollection, useDocument, useFirestore } from 'vuefire'
+import { collection, doc, setDoc, deleteDoc, query, where } from 'firebase/firestore'
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { db, storage } from '../firebase.js'
+import { computed } from 'vue'
+import { storage } from '../firebase.js'
 
 export default {
   name: 'TeamPage',
   props: ['teamId'],
+  setup(props) {
+    const db = useFirestore()
+    const team = useDocument(doc(db, 'teams', props.teamId))
+    const players = useCollection(query(collection(db, 'players'), where('teamId', '==', props.teamId)))
+    const teamName = computed(() => team.value?.name || '')
+
+    return { team, players, teamName }
+  },
   data() {
     return {
-      teamName: '',
-      players: [],
       showModal: false,
       newPlayerName: '',
       newPlayer: {
@@ -109,32 +118,7 @@ export default {
       createdUrls: []
     }
   },
-  async mounted() {
-    await this.loadTeam()
-    await this.loadPlayers()
-  },
   methods: {
-    async loadTeam() {
-      try {
-        const teamRef = doc(db, 'teams', this.teamId)
-        const teamSnap = await getDoc(teamRef)
-        if (teamSnap.exists()) {
-          this.teamName = teamSnap.data().name
-        }
-      } catch (err) {
-        console.error('Failed to load team', err)
-      }
-    },
-    async loadPlayers() {
-      try {
-        const playersCol = collection(db, 'players')
-        const q = query(playersCol, where('teamId', '==', this.teamId))
-        const snapshot = await getDocs(q)
-        this.players = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-      } catch (err) {
-        console.error('Failed to load players', err)
-      }
-    },
     onFileChange(e) {
       const file = e.target.files?.[0]
       if (!file) return
@@ -154,6 +138,7 @@ export default {
       }
 
       try {
+        const db = useFirestore()
         const playerId = Date.now().toString()
         let photoUrl = null
 
@@ -179,12 +164,6 @@ export default {
           createdAt: new Date().toISOString()
         })
 
-        this.players.push({
-          id: playerId,
-          name: this.newPlayerName,
-          photo: photoUrl
-        })
-
         if (this.newPlayer.photoPreview && this.createdUrls.includes(this.newPlayer.photoPreview)) {
           URL.revokeObjectURL(this.newPlayer.photoPreview)
           this.createdUrls = this.createdUrls.filter(u => u !== this.newPlayer.photoPreview)
@@ -193,8 +172,17 @@ export default {
         this.newPlayer = { photoPreview: null, file: null }
         this.showModal = false
       } catch (err) {
-        console.error('Failed to add player', err)
         alert('Failed to add player: ' + err.message)
+      }
+    },
+    async deletePlayer(playerId) {
+      if (!confirm('Are you sure you want to delete this player?')) return
+
+      try {
+        const db = useFirestore()
+        await deleteDoc(doc(db, 'players', playerId))
+      } catch (err) {
+        alert('Failed to delete player: ' + err.message)
       }
     }
   },
@@ -209,12 +197,18 @@ export default {
 </script>
 
 <style scoped>
+.player-item-wrapper {
+  display: flex;
+  align-items: stretch;
+  background: #E5E5E5;
+  border-bottom: 3px solid #fff;
+}
+
 .player-item {
   display: flex;
   align-items: center;
   padding: 16px 20px;
-  background: #E5E5E5;
-  border-bottom: 3px solid #fff;
+  flex: 1;
   cursor: pointer;
   transition: background-color 0.2s;
   text-decoration: none;
@@ -223,6 +217,11 @@ export default {
 
 .player-item:hover {
   background: #d5d5d5;
+}
+
+.delete-player-btn {
+  margin: 10px;
+  align-self: center;
 }
 
 .player-photo {

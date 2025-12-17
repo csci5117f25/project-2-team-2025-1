@@ -1,9 +1,20 @@
 <template>
-  <div>
-    <video ref="videoPlayer" class="video-js vjs-default-skin"></video>
+  <div class="container">
+    <div class="section">
+<button
+        @click="$router.back()"
+        class="button is-text mb-3"
+      >
+        <span class="icon">←</span>
+        <span>Back to Player</span>
+      </button>
 
-    <!-- Add Marker Form -->
-    <div class="box mt-4">
+      <h1 class="title is-4 mb-4">{{ gameTitle }}</h1>
+
+      <video ref="videoPlayer" class="video-js vjs-default-skin"></video>
+
+      <!-- Add Marker Form -->
+      <div class="box mt-4">
       <form @submit.prevent="addMarker" class="marker-form">
         <div class="field is-horizontal">
           <div class="field-label is-normal">
@@ -64,6 +75,7 @@
         </div>
       </div>
     </div>
+    </div>
   </div>
 </template>
 
@@ -75,86 +87,98 @@ import "video.js/dist/video-js.css";
 import "videojs-markers";
 import "videojs-markers/dist/videojs.markers.css";
 
+import { useDocument, useFirestore } from 'vuefire'
+import { doc } from 'firebase/firestore'
+import { computed } from 'vue'
+
 export default {
   name: "VideoPlayer",
 
   props: {
-    options: {
-      type: Object,
-      default() {
-        return {};
-      }
-    }
+    playerId: String,
+    gameId: String
+  },
+
+  setup(props) {
+    const db = useFirestore()
+    const game = useDocument(doc(db, 'games', props.gameId))
+    const player = useDocument(doc(db, 'players', props.playerId))
+
+    const teamId = computed(() => player.value?.teamId || null)
+    const gameTitle = computed(() => game.value?.title || 'Loading...')
+
+    return { game, player, teamId, gameTitle }
   },
 
   data() {
     return {
-      player: null,
+      videoPlayer: null,
       markers: [],
-
       newMarker: {
         time: 0,
         text: ""
-      },
-      defaultVideoOptions: {
-        autoplay: false,
-        controls: true,
-        preload: 'auto',
-        fluid: true,
-        sources: [
-          {
-            src: 'https://vjs.zencdn.net/v/oceans.mp4',
-            type: 'video/mp4'
-          }
-        ]
       }
     };
   },
 
   mounted() {
-    const videoOptions = this.options && this.options.sources && this.options.sources.length > 0
-      ? this.options
-      : this.defaultVideoOptions;
-
-    this.player = videojs(this.$refs.videoPlayer, videoOptions, () => {
-      console.log("Video ready");
-
-      // Initialize plugin with tooltip enabled
-      this.player.markers({
-        markers: [],
-        markerStyle: {
-          width: "7px",
-          "border-radius": "30%",
-          "background-color": "red"
-        },
-        markerTip: {
-          display: true,
-          text: marker => marker.text
-        }
-      });
-    });
+    this.$nextTick(() => {
+      if (this.game) {
+        this.initPlayer()
+      }
+    })
   },
 
   watch: {
-    options: {
-      handler(newOptions) {
-        if (this.player && newOptions.sources) {
-          this.player.src(newOptions.sources);
-          this.player.load();
+    game: {
+      handler(newGame) {
+        if (newGame && newGame.videoUrl && !this.videoPlayer) {
+          this.initPlayer()
         }
       },
-      deep: true
+      immediate: true
     }
   },
 
   methods: {
+
+    initPlayer() {
+      if (!this.game || !this.game.videoUrl || this.videoPlayer) return
+
+      const videoOptions = {
+        autoplay: false,
+        controls: true,
+        preload: 'auto',
+        fluid: true,
+        sources: [{
+          src: this.game.videoUrl,
+          type: 'video/mp4'
+        }]
+      }
+
+      this.videoPlayer = videojs(this.$refs.videoPlayer, videoOptions, () => {
+        this.videoPlayer.markers({
+          markers: [],
+          markerStyle: {
+            width: "7px",
+            "border-radius": "30%",
+            "background-color": "red"
+          },
+          markerTip: {
+            display: true,
+            text: marker => marker.text
+          }
+        })
+      })
+    },
+
     addMarker() {
       const markerData = {
         time: this.newMarker.time,
         text: this.newMarker.text
       };
 
-      this.player.markers.add([markerData]);
+      this.videoPlayer.markers.add([markerData]);
 
       this.markers.push(markerData);
 
@@ -164,8 +188,8 @@ export default {
 
     jumpToChapter(event) {
       const time = Number(event.target.value);
-      if (!isNaN(time) && this.player) {
-        this.player.currentTime(time);
+      if (!isNaN(time) && this.videoPlayer) {
+        this.videoPlayer.currentTime(time);
       }
     },
 
@@ -177,7 +201,7 @@ export default {
   },
 
   beforeUnmount() {
-    if (this.player) this.player.dispose();
+    if (this.videoPlayer) this.videoPlayer.dispose();
   }
 };
 </script>

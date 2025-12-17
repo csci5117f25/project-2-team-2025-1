@@ -27,21 +27,21 @@ const firebaseConfig = {
 
 
 // if not configured, don't initialize and export nulls
-let app
+let firebaseApp
 let storage
 let db
 let auth
 try {
     if (firebaseConfig.apiKey) {
-        app = initializeApp(firebaseConfig)
+        firebaseApp = initializeApp(firebaseConfig)
         // optional: initialize analytics if available in the environment
-        try { getAnalytics(app) } catch (e) { /* ignore in non-browser envs */ }
-        storage = getStorage(app)
-        db = getFirestore(app)
-        auth = getAuth(app)
+        try { getAnalytics(firebaseApp) } catch (e) { /* ignore in non-browser envs */ }
+        storage = getStorage(firebaseApp)
+        db = getFirestore(firebaseApp)
+        auth = getAuth(firebaseApp)
     }
 } catch (e) {
     // initialization failed (likely missing env vars); leave undefined
 }
 
-export { storage, db, auth }
+export { firebaseApp, storage, db, auth }

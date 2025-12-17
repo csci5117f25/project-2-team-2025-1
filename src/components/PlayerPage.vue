@@ -9,7 +9,8 @@
         <div class="media">
           <div class="media-left">
             <figure class="image is-96x96">
-              <div class="has-text-centered is-size-1">🏀</div>
+              <img v-if="player.photo" :src="player.photo" alt="player photo" style="width:96px;height:96px;object-fit:cover;border-radius:50%;" />
+              <div v-else class="has-text-centered is-size-1">🏀</div>
             </figure>
           </div>
           <div class="media-content">
@@ -59,6 +60,7 @@
             <div class="card-content">
               <p class="title is-6">{{ item.title }}</p>
               <p class="subtitle is-7">{{ item.date }}</p>
+              <button class="button is-small is-danger mt-2" @click="deleteHighlight(item.id)">Delete</button>
             </div>
           </div>
         </div>
@@ -81,12 +83,15 @@
               <div class="card-content">
                 <p class="title is-6">{{ game.title }}</p>
                 <p class="subtitle is-7">{{ game.date }}</p>
-                <router-link
-                  :to="{ name: 'GameEditor', params: { playerId: $route.params.id, gameId: game.id } }"
-                  class="button is-small is-primary is-outlined mt-2"
-                >
-                  Edit Game
-                </router-link>
+                <div class="buttons mt-2">
+                  <router-link
+                    :to="{ name: 'GameEditor', params: { playerId: $route.params.id, gameId: game.id } }"
+                    class="button is-small is-primary is-outlined"
+                  >
+                    Edit Game
+                  </router-link>
+                  <button class="button is-small is-danger" @click="deleteGame(game.id)">Delete</button>
+                </div>
               </div>
             </div>
           </div>
@@ -113,6 +118,10 @@
 </template>
 
 <script>
+import { useCollection, useDocument, useFirestore } from 'vuefire'
+import { collection, doc, deleteDoc, query, where } from 'firebase/firestore'
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import AddVideoModal from './AddVideoModal.vue'
 
 export default {
@@ -120,71 +129,31 @@ export default {
   components: {
     AddVideoModal
   },
+  setup() {
+    const route = useRoute()
+    const db = useFirestore()
+    const playerId = computed(() => route.params.id)
+
+    const currentPlayer = useDocument(computed(() => doc(db, 'players', playerId.value)))
+    const highlights = useCollection(computed(() =>
+      query(collection(db, 'highlights'), where('playerId', '==', playerId.value))
+    ))
+    const games = useCollection(computed(() =>
+      query(collection(db, 'games'), where('playerId', '==', playerId.value))
+    ))
+
+    const player = computed(() => currentPlayer.value || { name: 'Player', number: '--' })
+
+    return { currentPlayer, highlights, games, player }
+  },
   data() {
     return {
-      currentPlayer: null,
-      highlights: [],
-      games: [],
       activeTab: 'highlights',
       showAddModal: false,
       videoType: 'highlight'
     }
   },
-  async mounted() {
-    await this.loadPlayer()
-    await this.loadHighlights()
-    await this.loadGames()
-  },
-  computed: {
-    player() {
-      return this.currentPlayer || { name: 'Player', number: '--' }
-    }
-  },
   methods: {
-    async loadPlayer() {
-      try {
-        const { doc, getDoc } = await import('firebase/firestore')
-        const { db } = await import('../firebase.js')
-
-        const playerId = this.$route.params.id
-        const playerRef = doc(db, 'players', playerId)
-        const playerSnap = await getDoc(playerRef)
-
-        if (playerSnap.exists()) {
-          this.currentPlayer = { id: playerSnap.id, ...playerSnap.data() }
-        }
-      } catch (err) {
-        console.error('Failed to load player', err)
-      }
-    },
-    async loadHighlights() {
-      try {
-        const { collection, getDocs, query, where } = await import('firebase/firestore')
-        const { db } = await import('../firebase.js')
-
-        const playerId = this.$route.params.id
-        const highlightsCol = collection(db, 'highlights')
-        const q = query(highlightsCol, where('playerId', '==', playerId))
-        const snapshot = await getDocs(q)
-        this.highlights = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-      } catch (err) {
-        console.error('Failed to load highlights', err)
-      }
-    },
-    async loadGames() {
-      try {
-        const { collection, getDocs, query, where } = await import('firebase/firestore')
-        const { db } = await import('../firebase.js')
-
-        const playerId = this.$route.params.id
-        const gamesCol = collection(db, 'games')
-        const q = query(gamesCol, where('playerId', '==', playerId))
-        const snapshot = await getDocs(q)
-        this.games = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
-      } catch (err) {
-        console.error('Failed to load games', err)
-      }
-    },
     setTab(tab){
       this.activeTab = tab
     },
@@ -192,11 +161,27 @@ export default {
       this.videoType = type
       this.showAddModal = true
     },
-    handleVideoSaved(type) {
-      if (type === 'highlight') {
-        this.loadHighlights()
-      } else {
-        this.loadGames()
+    handleVideoSaved() {
+      // VueFire automatically updates the collections
+    },
+    async deleteHighlight(highlightId) {
+      if (!confirm('Are you sure you want to delete this highlight?')) return
+
+      try {
+        const db = useFirestore()
+        await deleteDoc(doc(db, 'highlights', highlightId))
+      } catch (err) {
+        alert('Failed to delete highlight: ' + (err && err.message))
+      }
+    },
+    async deleteGame(gameId) {
+      if (!confirm('Are you sure you want to delete this game?')) return
+
+      try {
+        const db = useFirestore()
+        await deleteDoc(doc(db, 'games', gameId))
+      } catch (err) {
+        alert('Failed to delete game: ' + (err && err.message))
       }
     }
   }

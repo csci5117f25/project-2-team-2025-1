@@ -17,23 +17,21 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from 'firebase/auth'
+import { useCurrentUser, useFirebaseAuth } from 'vuefire'
+import { GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut } from 'firebase/auth'
+import { watch } from 'vue'
 
 export default {
   name: 'Auth',
   setup(props, { emit }) {
-    const user = ref(null)
-    const auth = getAuth()
+    const user = useCurrentUser()
+    const auth = useFirebaseAuth()
 
     const signInWithGoogle = async () => {
       const provider = new GoogleAuthProvider()
       try {
-        const result = await signInWithPopup(auth, provider)
-        user.value = result.user
-        emit('user-changed', result.user)
+        await signInWithPopup(auth, provider)
       } catch (error) {
-        console.error('Error signing in:', error)
         alert('Failed to sign in: ' + error.message)
       }
     }
@@ -41,19 +39,14 @@ export default {
     const signOut = async () => {
       try {
         await firebaseSignOut(auth)
-        user.value = null
-        emit('user-changed', null)
       } catch (error) {
         console.error('Error signing out:', error)
       }
     }
 
-    onMounted(() => {
-      onAuthStateChanged(auth, (currentUser) => {
-        user.value = currentUser
-        emit('user-changed', currentUser)
-      })
-    })
+    watch(user, (newUser) => {
+      emit('user-changed', newUser)
+    }, { immediate: true })
 
     return { user, signInWithGoogle, signOut }
   }
