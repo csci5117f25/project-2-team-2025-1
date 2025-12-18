@@ -67,6 +67,110 @@
         </div>
       </div>
     </div>
+
+    <!-- Notes Section -->
+    <div class="box">
+      <div class="notes-header" @click="notesExpanded = !notesExpanded" style="cursor: pointer;">
+        <h3 class="title is-5">
+          Notes
+          <span class="icon is-small">
+            <i :class="notesExpanded ? 'arrow-down' : 'arrow-right'">{{ notesExpanded ? '▼' : '▶' }}</i>
+          </span>
+        </h3>
+      </div>
+
+      <!-- Add Note Form -->
+      <div v-show="notesExpanded" class="mt-3">
+        <form @submit.prevent="addNote" class="note-form">
+          <div class="field is-horizontal">
+            <div class="field-label is-normal">
+              <label class="label">Time (seconds):</label>
+            </div>
+            <div class="field-body">
+              <div class="field has-addons">
+                <div class="control is-expanded">
+                  <input v-model.number="newNote.time" type="number" min="0" step="0.1" required class="input" />
+                </div>
+                <div class="control">
+                  <button type="button" @click="useCurrentTimeForNote" class="button is-info">Use Current Time</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="field is-horizontal">
+            <div class="field-label is-normal">
+              <label class="label">Note:</label>
+            </div>
+            <div class="field-body">
+              <div class="field">
+                <div class="control">
+                  <textarea v-model="newNote.text" required class="textarea" placeholder="Add your note here..." rows="3"></textarea>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="field is-horizontal">
+            <div class="field-label"></div>
+            <div class="field-body">
+              <div class="field">
+                <div class="control">
+                  <button type="submit" class="button is-success">Add Note</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </form>
+
+        <!-- Notes List -->
+        <div v-if="notes.length > 0" class="notes-list mt-4">
+          <div class="tabs is-boxed">
+            <ul>
+              <li
+                v-for="(note, index) in sortedNotes"
+                :key="index"
+                @click="jumpToTime(note.time)"
+                class="note-tab"
+              >
+                <a>
+                  <span class="note-time">{{ formatTime(note.time) }}</span>
+                  <span class="note-preview">{{ truncateNote(note.text) }}</span>
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <!-- Detailed notes view -->
+          <div class="notes-detail">
+            <div v-for="(note, index) in sortedNotes" :key="'detail-' + index" class="note-card box mb-3">
+              <div class="level is-mobile">
+                <div class="level-left">
+                  <div class="level-item">
+                    <strong class="has-text-info">{{ formatTime(note.time) }}</strong>
+                  </div>
+                </div>
+                <div class="level-right">
+                  <div class="level-item">
+                    <button @click="deleteNote(index)" class="delete is-small"></button>
+                  </div>
+                </div>
+              </div>
+              <p class="note-text">{{ note.text }}</p>
+              <button @click="jumpToTime(note.time)" class="button is-small is-link mt-2">
+                <span class="icon is-small">
+                  <span>▶</span>
+                </span>
+                <span>Jump to Time</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div v-else class="has-text-grey-light mt-3">
+          No notes yet. Add a note to get started!
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -108,8 +212,14 @@ export default {
     return {
       player: null,
       markers: [],
+      notes: [],
+      notesExpanded: true,
 
       newMarker: {
+        time: 0,
+        text: ""
+      },
+      newNote: {
         time: 0,
         text: ""
       },
@@ -145,8 +255,9 @@ export default {
     this.player = videojs(this.$refs.videoPlayer, videoOptions, async () => {
       console.log('Video player is ready');
 
-      // Load markers from database
+      // Load markers and notes from database
       await this.loadMarkers();
+      await this.loadNotes();
 
       // Initialize markers plugin
       this.player.markers({
@@ -186,12 +297,27 @@ export default {
     }
   },
 
+  computed: {
+    sortedNotes() {
+      return [...this.notes].sort((a, b) => a.time - b.time);
+    }
+  },
+
   methods: {
     useCurrentTime() {
       if (this.player) {
         const currentTime = this.player.currentTime();
         this.newMarker.time = Math.round(currentTime * 10) / 10; // Round to 1 decimal place
         console.log('Current time captured:', this.newMarker.time);
+      } else {
+        console.warn('Player not ready');
+      }
+    },
+    useCurrentTimeForNote() {
+      if (this.player) {
+        const currentTime = this.player.currentTime();
+        this.newNote.time = Math.round(currentTime * 10) / 10;
+        console.log('Current time captured for note:', this.newNote.time);
       } else {
         console.warn('Player not ready');
       }
@@ -258,6 +384,46 @@ export default {
       const secs = Math.floor(seconds % 60).toString().padStart(2, "0");
       return `${mins}:${secs}`;
     },
+    async addNote() {
+      const noteData = {
+        time: this.newNote.time,
+        text: this.newNote.text,
+        timestamp: new Date().toISOString()
+      };
+
+      this.notes.push(noteData);
+
+      // Save notes to database
+      await this.saveNotes();
+
+      this.newNote.time = 0;
+      this.newNote.text = "";
+    },
+    jumpToTime(time) {
+      try {
+        if (!this.player) {
+          console.warn('Player not initialized');
+          return;
+        }
+
+        this.player.currentTime(time);
+        console.log('Jumped to time:', time);
+
+        if (this.player.paused()) {
+          this.player.play();
+        }
+      } catch (error) {
+        console.error('Error jumping to time:', error);
+      }
+    },
+    deleteNote(index) {
+      this.notes.splice(index, 1);
+      this.saveNotes();
+    },
+    truncateNote(text, maxLength = 30) {
+      if (text.length <= maxLength) return text;
+      return text.substring(0, maxLength) + '...';
+    },
     openChapters(){
       try{
         const el = this.$refs.chaptersSelect || document.getElementById('chapters')
@@ -316,6 +482,34 @@ export default {
           }catch(err){ console.warn('setDoc error', err) }
         }
       }
+    },
+    async loadNotes(){
+      try{
+        if(!this.gameId) return
+        const gRef = doc(db, 'games', String(this.gameId))
+        const gSnap = await getDoc(gRef)
+        if(gSnap.exists()){
+          const data = gSnap.data()
+          this.notes = data && data.notes ? data.notes : []
+        }
+      }catch(e){ console.warn('loadNotes error', e) }
+    },
+    async saveNotes(){
+      try{
+        if(!this.gameId) return
+        const gRef = doc(db, 'games', String(this.gameId))
+        await updateDoc(gRef, { notes: this.notes })
+        console.log('Notes saved successfully')
+      }catch(e){
+        console.warn('saveNotes error', e)
+        // If document doesn't exist, create it
+        if(e.code === 'not-found'){
+          try{
+            await setDoc(gRef, { notes: this.notes }, { merge: true })
+            console.log('Notes saved with setDoc')
+          }catch(err){ console.warn('setDoc error', err) }
+        }
+      }
     }
   },
 
@@ -332,6 +526,64 @@ export default {
 }
 
 .marker-form {
+  margin-top: 20px;
+}
+
+.note-form {
+  margin-bottom: 20px;
+}
+
+.notes-header {
+  display: flex;
+  align-items: center;
+  user-select: none;
+}
+
+.notes-header:hover {
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  padding: 4px;
+  margin: -4px;
+}
+
+.note-tab {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.note-tab:hover {
+  background-color: #f0f0f0;
+}
+
+.note-tab a {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.note-time {
+  font-weight: bold;
+  color: #3273dc;
+  font-size: 0.9em;
+}
+
+.note-preview {
+  font-size: 0.85em;
+  color: #666;
+}
+
+.note-card {
+  background-color: #fafafa;
+  border-left: 4px solid #3273dc;
+}
+
+.note-text {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin-top: 8px;
+}
+
+.notes-detail {
   margin-top: 20px;
 }
 </style>
