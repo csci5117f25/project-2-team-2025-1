@@ -5,7 +5,7 @@ CSCI 5117, Fall 2025, [assignment description](https://canvas.umn.edu/courses/51
 ## App Info:
 
 * Team Name: Team-2025😅
-* App Name: player trakcer
+* App Name: Player Tracker
 * App Link: <https://project2-f33f1.web.app/>
 
 ### Students
@@ -20,15 +20,15 @@ CSCI 5117, Fall 2025, [assignment description](https://canvas.umn.edu/courses/51
 **Describe the most challenging features you implemented
 (one sentence per bullet, maximum 4 bullets):**
 
-* ...
+Integrating the statistics for each player per team
 
 Which (if any) device integration(s) does your app support?
 
-* ...
+Camera
 
 Which (if any) progressive web app feature(s) does your app support?
 
-* ...
+N/A
 
 
 
@@ -69,7 +69,7 @@ along with a very brief caption:**
 Please do not document required libraries (e.g., VUE, Firebase, vuefire).**
 
 * Library or service name: description of use
-* ...
+* Video.js
 
 **If there's anything else you would like to disclose about how your project
 relied on external code, expertise, or anything else, please disclose that
