@@ -5,7 +5,7 @@ CSCI 5117, Fall 2025, [assignment description](https://canvas.umn.edu/courses/51
 ## App Info:
 
 * Team Name: Team-2025😅
-* App Name: player trakcer
+* App Name: Player Tracker
 * App Link: <https://project2-f33f1.web.app/>
 
 ### Students
@@ -20,15 +20,15 @@ CSCI 5117, Fall 2025, [assignment description](https://canvas.umn.edu/courses/51
 **Describe the most challenging features you implemented
 (one sentence per bullet, maximum 4 bullets):**
 
-* ...
+Integrating the statistics for each player per team
 
 Which (if any) device integration(s) does your app support?
 
-* ...
+Camera
 
 Which (if any) progressive web app feature(s) does your app support?
 
-* ...
+N/A
 
 
 
@@ -36,7 +36,7 @@ Which (if any) progressive web app feature(s) does your app support?
 
 **[Add images/photos that show your mockup](https://stackoverflow.com/questions/10189356/how-to-add-screenshot-to-readmes-in-github-repository) along with a very brief caption:**
 
-**Team Page and Athlete Highlighs page**
+**Team Page and Athlete Highlights page**
 ![Image](https://github.com/user-attachments/assets/1e0e19e5-a100-465d-b33d-3385bb989829)
 
 **Athlete stats and games page**
@@ -59,7 +59,14 @@ Which (if any) progressive web app feature(s) does your app support?
 **[Add a screenshot of each key page](https://stackoverflow.com/questions/10189356/how-to-add-screenshot-to-readmes-in-github-repository)
 along with a very brief caption:**
 
-![](https://media.giphy.com/media/o0vwzuFwCGAFO/giphy.gif)
+**Team Page**
+![Image](https://github.com/user-attachments/assets/0fe94c62-afc4-4636-acfb-b585caed7a25)
+**Highlights page**
+![Image](https://github.com/user-attachments/assets/a6cddce0-a4a2-4972-8fc3-4a18bcd3386c)
+**Stats Page**
+![Image](https://github.com/user-attachments/assets/ab100f38-c242-4735-b10b-c6879dbb26ee)
+**Video Note Page**
+![Image](https://github.com/user-attachments/assets/83b382f9-4178-4f48-8f82-c2c5d95ee032)
 
 
 
@@ -69,7 +76,7 @@ along with a very brief caption:**
 Please do not document required libraries (e.g., VUE, Firebase, vuefire).**
 
 * Library or service name: description of use
-* ...
+* Video.js
 
 **If there's anything else you would like to disclose about how your project
 relied on external code, expertise, or anything else, please disclose that
