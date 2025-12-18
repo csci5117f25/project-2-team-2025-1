@@ -59,9 +59,13 @@ N/A
 **[Add a screenshot of each key page](https://stackoverflow.com/questions/10189356/how-to-add-screenshot-to-readmes-in-github-repository)
 along with a very brief caption:**
 
+**Team Page**
 ![Image](https://github.com/user-attachments/assets/0fe94c62-afc4-4636-acfb-b585caed7a25)
+**Highlights page**
 ![Image](https://github.com/user-attachments/assets/a6cddce0-a4a2-4972-8fc3-4a18bcd3386c)
+**Stats Page**
 ![Image](https://github.com/user-attachments/assets/ab100f38-c242-4735-b10b-c6879dbb26ee)
+**Video Note Page**
 ![Image](https://github.com/user-attachments/assets/83b382f9-4178-4f48-8f82-c2c5d95ee032)
 
 
